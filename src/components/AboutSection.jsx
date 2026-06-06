@@ -20,7 +20,7 @@ const AboutSection = () => {
         },
         "contactPoint": {
             "@type": "ContactPoint",
-            "telephone": "+91-1234567890",
+            "telephone": "+91-9381260584",
             "contactType": "sales"
         }
     };
@@ -42,13 +42,14 @@ const AboutSection = () => {
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.8 }}
-                            className="relative aspect-[4/5] rounded-none overflow-hidden"
+                            className="relative aspect-[4/3] md:aspect-[4/5] rounded-none overflow-hidden"
                         >
-                            {/* High-quality stone yard image placeholder */}
+                            {/* High-quality stone yard image */}
                             <img
-                                src="about.jpg"
-                                alt="Tandur Yellow Limestone Cobble for Driveway Paving close up texture"
+                                src="/about.jpg"
+                                alt="Swamy Slabs stone yard - Tandur Yellow Limestone processing facility in Betamcherla, Kurnool"
                                 className="object-cover w-full h-full grayscale hover:grayscale-0 transition-all duration-700 ease-in-out"
+                                loading="lazy"
                             />
 
                             {/* Decorative Frame */}
@@ -67,10 +68,10 @@ const AboutSection = () => {
                             transition={{ duration: 0.6 }}
                         >
                             <span className="block text-amber-600 font-bold tracking-widest uppercase text-xl mb-2">About Us</span>
-                            <h1 className="text-4xl md:text-5xl font-serif font-light text-stone-900 leading-tight">
+                            <h2 className="text-4xl md:text-5xl font-serif font-light text-stone-900 leading-tight">
                                 Architectural Excellence,<br />
                                 <span className="italic font-medium">by Swamy Slabs.</span>
-                            </h1>
+                            </h2>
                         </motion.div>
 
                         {/* Core Narrative Pillars */}

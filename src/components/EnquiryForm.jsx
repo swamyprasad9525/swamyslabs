@@ -17,7 +17,9 @@ const EnquiryForm = ({ isOpen, onClose, product }) => {
             setFormData(prev => ({
                 ...prev,
                 materialType: product.materialType || '',
-                thickness: product.thickness || ''
+                thickness: product.thickness || '',
+                quantity: product.quantity || '',
+                message: product.message || ''
             }));
         }
     }, [isOpen, product]);

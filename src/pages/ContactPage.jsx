@@ -25,12 +25,13 @@ const ContactPage = () => {
     return (
         <div className="min-h-screen bg-[#0c0a09] text-stone-200 font-sans selection:bg-amber-900 selection:text-white pt-5 overflow-x-hidden">
             <SEO
-                title="Contact Us - Swamy Slabs | Indian Stone Exporter"
-                description="Contact Swamy Slabs for premium Indian Limestone and Granite. Based in Tandur, Telangana. We export globally."
-                keywords="Contact Swamy Slabs, Stone Exporter Contact, Tandur Stone Supplier, Granite Supplier India"
+                title="Contact Us - Swamy Slabs | Indian Stone Exporter Kurnool AP"
+                description="Contact Swamy Slabs for premium Indian Limestone and Granite. Based in Betamcherla, Kurnool, Andhra Pradesh. Phone: +91 9381260584. Email: kolliswami784@gmail.com. Global stone export."
+                keywords="Contact Swamy Slabs, Stone Exporter Contact, Betamcherla Stone Supplier, Granite Supplier Kurnool, Limestone Supplier AP"
+                canonicalUrl="https://swamyslabs.com/contact"
             />
             {/* 2. THE CORE EXPERIENCE: FORM & TABLETS */}
-            <section className="relative px-4 md:px-12 w-full overflow-hidden">
+            <section className="relative px-4 md:px-8 lg:px-12 w-full overflow-hidden py-8 md:py-0">
 
                 {/* 3D STONE BACKGROUND FOR THIS SECTION */}
                 <div className="absolute inset-0 z-0">

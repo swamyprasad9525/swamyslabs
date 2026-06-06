@@ -1,23 +1,37 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 
-const SEO = ({ title, description, keywords, canonicalUrl }) => {
+const SITE_URL = 'https://swamyslabs.com';
+const DEFAULT_OG_IMAGE = `${SITE_URL}/ssi_logo.png`;
+
+const SEO = ({ title, description, keywords, canonicalUrl, ogImage, noIndex = false }) => {
+    const fullTitle = title?.includes('Swamy Slabs') ? title : `${title} | Swamy Slabs`;
+    const canonical = canonicalUrl || SITE_URL;
+    const imageUrl = ogImage || DEFAULT_OG_IMAGE;
+
     return (
         <Helmet>
-            <title>{title.includes('Swamy Slabs') ? title : `${title} | Swamy Slabs`}</title>
+            <title>{fullTitle}</title>
             <meta name="description" content={description} />
-            <meta name="keywords" content={keywords} />
-            {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+            {keywords && <meta name="keywords" content={keywords} />}
+            <meta name="robots" content={noIndex ? 'noindex, nofollow' : 'index, follow'} />
+            <link rel="canonical" href={canonical} />
 
             {/* Open Graph / Facebook */}
             <meta property="og:type" content="website" />
-            <meta property="og:title" content={title} />
+            <meta property="og:site_name" content="Swamy Slabs" />
+            <meta property="og:url" content={canonical} />
+            <meta property="og:title" content={fullTitle} />
             <meta property="og:description" content={description} />
+            <meta property="og:image" content={imageUrl} />
+            <meta property="og:image:alt" content="Swamy Slabs - Premium Natural Stone" />
+            <meta property="og:locale" content="en_IN" />
 
-            {/* Twitter */}
+            {/* Twitter Card */}
             <meta name="twitter:card" content="summary_large_image" />
-            <meta name="twitter:title" content={title} />
+            <meta name="twitter:title" content={fullTitle} />
             <meta name="twitter:description" content={description} />
+            <meta name="twitter:image" content={imageUrl} />
         </Helmet>
     );
 };

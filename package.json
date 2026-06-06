@@ -7,15 +7,23 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node server.js"
   },
   "dependencies": {
     "@react-three/drei": "^9.88.17",
     "@react-three/fiber": "^8.15.19",
     "clsx": "^2.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.1.5",
     "framer-motion": "^11.11.17",
+    "helmet": "^7.1.0",
     "js-cookie": "^3.0.5",
     "lucide-react": "^0.562.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.14",
     "react": "^18.3.1",
     "react-datepicker": "^9.1.0",
     "react-dom": "^18.3.1",

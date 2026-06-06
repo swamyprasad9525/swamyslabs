@@ -43,10 +43,10 @@ const CartDrawer = () => {
                                 animate={{ scale: 1, opacity: 1, y: 0 }}
                                 exit={{ scale: 0.95, opacity: 0, y: 10 }}
                                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                                className="bg-white w-full max-w-lg max-h-[85vh] aspect-[4/5] md:aspect-square rounded-[3rem] shadow-2xl flex flex-col overflow-hidden relative"
+                                className="bg-white w-full max-w-lg max-h-[90vh] rounded-[2rem] md:rounded-[3rem] shadow-2xl flex flex-col overflow-hidden relative"
                             >
                                 {/* Luxury Header */}
-                                <div className="pt-10 px-10 pb-4 flex justify-between items-start shrink-0">
+                                <div className="pt-6 md:pt-10 px-5 md:px-10 pb-4 flex justify-between items-start shrink-0">
                                     <div className="space-y-2">
                                         <h2 className="text-3xl font-serif font-bold text-stone-900 tracking-tight">Your Selection</h2>
                                         <p className="text-[10px] font-black uppercase tracking-[0.25em] text-stone-400">
@@ -62,7 +62,7 @@ const CartDrawer = () => {
                                 </div>
 
                                 {/* Cart Items Stage */}
-                                <div className="flex-1 overflow-y-auto px-10 py-2 custom-scrollbar">
+                                <div className="flex-1 overflow-y-auto px-5 md:px-10 py-2 custom-scrollbar">
                                     {cartItems.length === 0 ? (
                                         <div className="h-full flex flex-col items-center justify-center text-center space-y-8 -mt-8">
                                             <div className="w-32 h-32 bg-stone-50/50 rounded-full flex items-center justify-center border border-stone-100 italic font-serif text-4xl text-stone-300">
@@ -144,7 +144,7 @@ const CartDrawer = () => {
 
                                 {/* Checkout Footer Case */}
                                 {cartItems.length > 0 && (
-                                    <div className="p-8 pb-10 bg-white border-t border-stone-100 shrink-0">
+                                    <div className="p-5 md:p-8 pb-8 md:pb-10 bg-white border-t border-stone-100 shrink-0">
                                         <div className="flex justify-between items-end mb-6">
                                             <div className="space-y-1">
                                                 <p className="text-[10px] font-black uppercase tracking-widest text-stone-400">Total Selection</p>

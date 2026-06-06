@@ -21,9 +21,10 @@ const CollectionPage = () => {
     return (
         <div className="min-h-screen bg-stone-900">
             <SEO
-                title="Our Stone Collection - Premium Indian Limestone & Sandstone"
-                description="Explore our exquisite collection of natural stones including Tandur Yellow Limestone, Black Limestone, and processed Granite slabs."
-                keywords="Stone Collection, Indian Limestone, Tandur Stone, Granite Slabs, Natural Stone Catalogue"
+                title="Stone Collection - Premium Indian Limestone, Sandstone & Granite | Swamy Slabs"
+                description="Explore our premium collection of natural stones: Tandur Yellow Limestone, Kadappa Black, Napa Slabs, Sandstone, and Granite. Wholesale pricing, bulk supply from Betamcherla, AP."
+                keywords="Stone Collection, Indian Limestone, Tandur Stone, Kadappa Black, Granite Slabs, Natural Stone Catalogue, Napa Slabs, Betamcherla Stone, Wholesale Stone"
+                canonicalUrl="https://swamyslabs.com/collection"
             />
             {/* Fixed Background Animation - Stays put while content scrolls */}
             <div className="fixed inset-0 z-0 pointer-events-none">
@@ -34,12 +35,12 @@ const CollectionPage = () => {
             <div className="relative z-10">
 
                 {/* Hero Text Section (Transparent) */}
-                <section className="relative h-[80vh] w-full flex flex-col items-center justify-center pointer-events-none">
+                <section className="relative h-[60vh] md:h-[80vh] w-full flex flex-col items-center justify-center pointer-events-none">
                     <div className="text-center px-4 animate-fade-in-up pointer-events-auto">
-                        <span className="text-amber-500/80 uppercase tracking-[0.2em] text-sm md:text-base font-medium mb-3 block">
+                        <span className="text-amber-500/80 uppercase tracking-[0.2em] text-xs md:text-sm font-medium mb-3 block">
                             The Quarry Gallery
                         </span>
-                        <h1 className="text-3xl md:text-5xl font-serif font-light text-stone-100 mb-6 tracking-wide leading-tight max-w-4xl mx-auto">
+                        <h1 className="text-2xl sm:text-3xl md:text-5xl font-serif font-light text-stone-100 mb-6 tracking-wide leading-tight max-w-4xl mx-auto">
                             Centuries of Geology<span className="text-amber-600">,</span> <br className="hidden md:block" />
                             Hand-Selected for Your Vision
                         </h1>

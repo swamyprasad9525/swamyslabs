@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
-import { X, Calendar, Clock, Phone, Mail, User } from 'lucide-react';
+import { X, Clock, Phone, User, Check } from 'lucide-react';
 
 const CallbackForm = ({ isOpen, onClose, product }) => {
     const [formData, setFormData] = useState({
@@ -14,11 +14,6 @@ const CallbackForm = ({ isOpen, onClose, product }) => {
 
     useEffect(() => {
         if (!isOpen) {
-            setFormData({
-                name: '',
-                phone: '',
-                scheduledTime: new Date()
-            });
             setFormData({
                 name: '',
                 phone: '',
@@ -156,21 +151,5 @@ const CallbackForm = ({ isOpen, onClose, product }) => {
         </div>
     );
 };
-
-// Simple Check icon for success state
-const Check = ({ className }) => (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={className}
-    >
-        <polyline points="20 6 9 17 4 12" />
-    </svg>
-);
 
 export default CallbackForm;

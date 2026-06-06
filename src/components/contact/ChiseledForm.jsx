@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const ChiseledInput = ({ label, type = "text", placeholder, id, textarea = false, value, onChange }) => {
     const [isFocused, setIsFocused] = useState(false);
@@ -79,6 +80,7 @@ const SubmitButton = ({ onClick, status, disabled }) => {
 };
 
 const ChiseledForm = () => {
+    const { showToast } = useToast();
     const [formData, setFormData] = useState({
         name: '',
         phoneNumber: '', // Using phoneNumber instead of email for primary consistent with backend logic, or we can use email
@@ -94,7 +96,7 @@ const ChiseledForm = () => {
 
     const handleSubmit = async () => {
         if (!formData.name || !formData.phoneNumber) {
-            alert('Name and Phone Number are required.');
+            showToast('Name and Phone Number are required.', 'error');
             return;
         }
 
@@ -122,6 +124,7 @@ const ChiseledForm = () => {
 
             if (response.ok) {
                 setStatus('sent');
+                showToast('Inquiry sent successfully! We will contact you soon.', 'success');
                 // Reset form after delay
                 setTimeout(() => {
                     setStatus('idle');
@@ -134,13 +137,13 @@ const ChiseledForm = () => {
                 }, 3000);
             } else {
                 setStatus('error');
-                alert('Failed to send message. Please try again.');
+                showToast('Failed to send message. Please try again.', 'error');
                 setStatus('idle');
             }
         } catch (error) {
             console.error('Error sending message:', error);
             setStatus('error');
-            alert('Something went wrong. Please check your connection.');
+            showToast('Something went wrong. Please check your connection.', 'error');
             setStatus('idle');
         }
     };

@@ -81,7 +81,7 @@ const SmartSurfacePlanner = () => {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-stone-100 flex flex-col md:flex-row h-full">
 
             {/* LEFT: Interactive Blueprint & Configuration */}
-            <div className="p-8 md:w-3/5 space-y-8 relative">
+            <div className="p-5 md:p-8 md:w-3/5 space-y-6 md:space-y-8 relative">
                 <div className="absolute inset-0 bg-[#f4f4f5] bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] -z-10 opacity-50" />
 
                 {/* Header */}
@@ -96,7 +96,7 @@ const SmartSurfacePlanner = () => {
                 </div>
 
                 {/* 2D Visualizer */}
-                <div className="h-[320px] bg-white border border-stone-200 rounded-xl shadow-inner relative flex justify-center items-center overflow-hidden">
+                <div className="h-[220px] md:h-[320px] bg-white border border-stone-200 rounded-xl shadow-inner relative flex justify-center items-center overflow-hidden">
                     {/* Measurement Labels */}
                     <div className="absolute top-4 font-mono text-xs text-stone-400 bg-stone-100 px-2 py-1 rounded">
                         Blueprint Preview
@@ -197,7 +197,7 @@ const SmartSurfacePlanner = () => {
             </div>
 
             {/* RIGHT: Bill of Materials (BOM) */}
-            <div className="bg-stone-900 text-stone-300 p-8 md:w-2/5 flex flex-col justify-between relative overflow-hidden">
+            <div className="bg-stone-900 text-stone-300 p-5 md:p-8 md:w-2/5 flex flex-col justify-between relative overflow-hidden">
                 {/* Background Decor */}
                 <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
                     <Calculator size={120} />
@@ -273,7 +273,6 @@ const SmartSurfacePlanner = () => {
 
 const CheckIcon = () => (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="20 6 9 17 4 12"></polyline>
         <path d="M1 7l3 3 7-7" />
     </svg>
 );

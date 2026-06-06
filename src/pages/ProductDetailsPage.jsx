@@ -6,7 +6,9 @@ import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import { ChevronRight, ShieldCheck, Truck, Package, Info, MapPin, CheckCircle2, X } from 'lucide-react';
 import PriceEstimatorModal from '../components/PriceEstimatorModal';
 import CallbackForm from '../components/CallbackForm';
+import EnquiryForm from '../components/EnquiryForm';
 import SEO from '../components/SEO';
+import { useToast } from '../components/common/Toast';
 
 
 import { PREMIUM_STONES } from '../data/stones';
@@ -15,6 +17,7 @@ const ProductDetailsPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { addToCart } = useCart();
+    const { showToast } = useToast();
     const [product, setProduct] = useState(null);
     const [allProducts, setAllProducts] = useState(PREMIUM_STONES); // Use static data
     const [loading, setLoading] = useState(true);
@@ -32,6 +35,8 @@ const ProductDetailsPage = () => {
     // Modal States
     const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
     const [isCallModalOpen, setIsCallModalOpen] = useState(false);
+    const [isEnquiryModalOpen, setIsEnquiryModalOpen] = useState(false);
+    const [prefilledEnquiry, setPrefilledEnquiry] = useState(null);
 
 
     const quantityInputRef = useRef(null);
@@ -78,6 +83,7 @@ const ProductDetailsPage = () => {
             category: product.materialType,
             quantity: quantity
         });
+        showToast(`${quantity} ${unit}(s) of ${product.name} added to Selection!`, 'success');
         handleAction('cart');
     };
 
@@ -90,7 +96,19 @@ const ProductDetailsPage = () => {
             category: 'Sample',
             quantity: 1
         });
+        showToast(`Sample of ${product.name} added to Selection!`, 'success');
         handleAction('sample');
+    };
+
+    const handleProceedFromEstimator = (area, totalPrice) => {
+        setIsPriceModalOpen(false);
+        setPrefilledEnquiry({
+            ...product,
+            quantity: `${area} Sq.Ft`,
+            message: `Hi Swamy Slabs, I calculated an estimate of ₹${totalPrice.toLocaleString('en-IN', { maximumFractionDigits: 0 })} for ${area} Sq.Ft using the Price Estimator. I would like a formal quote for this project.`
+        });
+        setIsEnquiryModalOpen(true);
+        showToast(`Estimate calculated! Opening detailed enquiry.`, 'info');
     };
 
     const runStockCheck = () => {
@@ -124,10 +142,10 @@ const ProductDetailsPage = () => {
     );
 
     return (
-        <div className="bg-white min-h-screen pt-12 pb-12 font-sans text-slate-900 w-full overflow-x-hidden" ref={containerRef}>
+        <div className="bg-white min-h-screen pt-4 md:pt-12 pb-12 font-sans text-slate-900 w-full overflow-x-hidden" ref={containerRef}>
             {/* Breadcrumb - Clean & Subtle */}
             <div className="container mx-auto px-4 md:px-6 mb-8">
-                <nav className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                <nav className="flex items-center gap-1.5 text-xs text-slate-400 font-medium overflow-x-auto hide-scrollbar whitespace-nowrap">
                     <span className="hover:text-amber-600 cursor-pointer transition" onClick={() => navigate('/')}>Home</span>
                     <ChevronRight size={12} className="text-slate-300" />
                     <span className="hover:text-amber-600 cursor-pointer transition" onClick={() => navigate('/collection')}>Products</span>
@@ -138,9 +156,10 @@ const ProductDetailsPage = () => {
 
             <main className="container mx-auto px-4 md:px-6">
                 <SEO
-                    title={`${product.name} - Premium ${product.materialType} | Swamy Slabs`}
-                    description={`Buy high-quality ${product.name}. ${product.description ? product.description.substring(0, 150) + "..." : "Premium natural stone from India."}`}
-                    keywords={`${product.name}, ${product.materialType}, Indian Stone, ${product.name} Price, Buy ${product.name}`}
+                    title={`${product.name} - ${product.materialType} Stone | Swamy Slabs`}
+                    description={`Buy high-quality ${product.name} (${product.finish}) at ₹${product.pricePerSqFt}/sq.ft. ${product.description ? product.description.substring(0, 130) + '...' : 'Premium natural stone from India.'} Available in ${product.dimensions}.`}
+                    keywords={`${product.name}, ${product.materialType}, Indian Stone, ${product.finish} finish, ${product.name} Price, Buy ${product.name}, Natural Stone India`}
+                    canonicalUrl={`https://swamyslabs.com/collection/${product.id}`}
                 />
                 <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
@@ -210,36 +229,89 @@ const ProductDetailsPage = () => {
                                     </div>
                                 </motion.div>
 
-                                {/* Quick Forms */}
-                                <motion.div
-                                    variants={{ hidden: { opacity: 0, x: 20 }, visible: { opacity: 1, x: 0 } }}
-                                    className="flex flex-wrap gap-4 items-center justify-center"
-                                >
-                                    <motion.button
-                                        whileHover={{ scale: 1.05 }}
-                                        whileTap={{ scale: 0.95 }}
-                                        onClick={() => setIsPriceModalOpen(true)}
-                                        className="bg-black text-white px-8 py-3 rounded shadow-lg font-bold text-sm tracking-wide relative overflow-hidden w-full md:w-auto"
-                                    >
-                                        <AnimatePresence mode="wait">
-                                            {actionStatus === 'sending' ? (
-                                                <motion.div key="sending" initial={{ y: 20 }} animate={{ y: 0 }} exit={{ y: -20 }} className="flex items-center justify-center gap-2">
-                                                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                                    Please wait...
-                                                </motion.div>
-                                            ) : actionStatus === 'success' ? (
-                                                <motion.div key="success" initial={{ y: 20 }} animate={{ y: 0 }} exit={{ y: -20 }} className="flex items-center justify-center gap-2 text-green-400">
-                                                    <CheckCircle2 size={16} />
-                                                    Price Requested
-                                                </motion.div>
+                                {/* Quantity and Unit Selector */}
+                                <div className="flex gap-4 items-end mb-6 w-full">
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Quantity</label>
+                                        <div className="relative flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50 hover:bg-slate-100 transition-colors h-12">
+                                            {isQuantityEditing ? (
+                                                <input
+                                                    ref={quantityInputRef}
+                                                    type="number"
+                                                    value={quantity}
+                                                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                                    onBlur={toggleQuantityEdit}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') toggleQuantityEdit(); }}
+                                                    className="w-full h-full px-4 bg-white outline-none font-bold text-sm"
+                                                    min="1"
+                                                />
                                             ) : (
-                                                <motion.span key="default" initial={{ y: 20 }} animate={{ y: 0 }} exit={{ y: -20 }}>
-                                                    Get Best Price
-                                                </motion.span>
+                                                <span 
+                                                    onClick={toggleQuantityEdit}
+                                                    className="w-full h-full flex items-center px-4 font-bold text-sm cursor-pointer"
+                                                >
+                                                    {quantity}
+                                                </span>
                                             )}
-                                        </AnimatePresence>
+                                        </div>
+                                    </div>
+                                    <div className="w-1/3">
+                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Unit</label>
+                                        <select
+                                            value={unit}
+                                            onChange={(e) => setUnit(e.target.value)}
+                                            className="w-full h-12 px-3 border border-slate-200 rounded-lg bg-slate-50 outline-none text-sm font-bold cursor-pointer hover:bg-slate-100 transition-colors"
+                                        >
+                                            {units.map((u) => (
+                                                <option key={u} value={u}>{u}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Quick Forms / Action Panel */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                                    {/* Get Best Price */}
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => setIsPriceModalOpen(true)}
+                                        className="bg-black text-white h-12 rounded-lg font-bold text-xs tracking-wider uppercase flex items-center justify-center shadow-md hover:bg-slate-800 transition-all"
+                                    >
+                                        Get Best Price
                                     </motion.button>
-                                </motion.div>
+
+                                    {/* Add to Selection */}
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={handleAddToCart}
+                                        className="border-2 border-stone-900 text-stone-900 bg-white h-12 rounded-lg font-bold text-xs tracking-wider uppercase flex items-center justify-center hover:bg-stone-50 transition-all"
+                                    >
+                                        Add to Cart
+                                    </motion.button>
+
+                                    {/* Request Sample */}
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={handleGetSample}
+                                        className="border border-dashed border-stone-400 text-stone-600 bg-stone-50/50 h-12 rounded-lg font-bold text-xs tracking-wider uppercase flex items-center justify-center hover:bg-stone-100/50 transition-all"
+                                    >
+                                        Request Sample
+                                    </motion.button>
+
+                                    {/* Request to Call */}
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => setIsCallModalOpen(true)}
+                                        className="bg-stone-900 text-white h-12 rounded-lg font-bold text-xs tracking-wider uppercase flex items-center justify-center shadow-md hover:bg-stone-800 transition-all gap-2"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+                                        Request Call
+                                    </motion.button>
+                                </div>
 
 
                             </motion.div>
@@ -259,34 +331,7 @@ const ProductDetailsPage = () => {
                                 ))}
                             </div>
 
-                            {/* Secondary Actions */}
-                            <div className="flex flex-wrap gap-4 pt-4">
-                                <motion.button
-                                    whileHover={{ y: -2, backgroundColor: '#f8fafc' }}
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={() => setIsCallModalOpen(true)}
-                                    // disabled={actionStatus === 'sending'}
-                                    className="w-full flex items-center justify-center gap-3 border-2 border-slate-900 bg-slate-900 text-white py-4 px-6 rounded-lg font-bold transition-all relative overflow-hidden shadow-lg hover:bg-slate-800 hover:border-slate-800"
-                                >
-                                    <AnimatePresence mode="wait">
-                                        {actionStatus === 'sending' ? (
-                                            <motion.div key="sending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                            </motion.div>
-                                        ) : actionStatus === 'success' ? (
-                                            <motion.div key="success" initial={{ y: 20 }} animate={{ y: 0 }} className="flex items-center gap-2">
-                                                <CheckCircle2 size={18} className="text-green-400" />
-                                                <span className="text-green-400">Requested!</span>
-                                            </motion.div>
-                                        ) : (
-                                            <motion.div key="default" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
-                                                Request to Call
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </motion.button>
-                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -301,7 +346,7 @@ const ProductDetailsPage = () => {
                         {/* 2-column Grid of specs */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-0">
                             {[
-                                { label: 'Application', value: product.application.join(', ') },
+                                { label: 'Application', value: (product.application || []).join(', ') || 'General Use' },
                                 { label: 'Form', value: 'Slab' },
                                 { label: 'Color', value: product.materialType === 'Limestone' ? 'Yellow/Beige' : 'Natural' },
                                 { label: 'Shape', value: 'Square/Rectangular' },
@@ -355,11 +400,20 @@ const ProductDetailsPage = () => {
                 isOpen={isPriceModalOpen}
                 onClose={() => setIsPriceModalOpen(false)}
                 product={product}
+                onProceed={handleProceedFromEstimator}
             />
             <CallbackForm
                 isOpen={isCallModalOpen}
                 onClose={() => setIsCallModalOpen(false)}
                 product={product}
+            />
+            <EnquiryForm
+                isOpen={isEnquiryModalOpen}
+                onClose={() => {
+                    setIsEnquiryModalOpen(false);
+                    setPrefilledEnquiry(null);
+                }}
+                product={prefilledEnquiry || product}
             />
 
         </div>

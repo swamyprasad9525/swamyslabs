@@ -90,6 +90,11 @@ const HeroSection = () => {
     const headline = "Nature's Art, Carved for Your Home";
     const words = headline.split(" ");
 
+    // Flashlight gradient (must be at component level, not inside JSX)
+    const lightXPct = useTransform(mouseX, v => (v + 0.5) * 100);
+    const lightYPct = useTransform(mouseY, v => (v + 0.5) * 100);
+    const flashlightGradient = useMotionTemplate`radial-gradient(circle 600px at ${lightXPct}% ${lightYPct}%, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.9) 100%)`;
+
     return (
         <section
             ref={containerRef}
@@ -143,9 +148,7 @@ const HeroSection = () => {
             {/* Flashlight / Dynamic Gradient Overlay */}
             <motion.div
                 className="absolute inset-0 pointer-events-none z-10"
-                style={{
-                    background: useMotionTemplate`radial-gradient(circle 600px at ${useTransform(mouseX, v => (v + 0.5) * 100)}% ${useTransform(mouseY, v => (v + 0.5) * 100)}%, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.9) 100%)`
-                }}
+                style={{ background: flashlightGradient }}
             />
 
             {/* Dynamic Lighting Tint (Time of day feel - Warm to Cool) */}
@@ -159,12 +162,12 @@ const HeroSection = () => {
                     animate={{ opacity: isRevealed ? 1 : 0 }}
                     transition={{ delay: 1.5, duration: 1 }}
                 >
-                    <h5 className="text-stone-300 font-mono tracking-[0.4em] uppercase text-xs or md:text-sm mb-6">
+                    <h5 className="text-stone-300 font-mono tracking-[0.4em] uppercase text-xs md:text-sm mb-6">
                         • PREMIUM STONE COLLECTION
                     </h5>
 
                     {/* Animated Typography */}
-                    <h1 className="text-6xl md:text-8xl lg:text-9xl font-serif text-white font-bold leading-[0.9] tracking-tight text-balance mix-blend-overlay">
+                    <h1 className="text-5xl md:text-8xl lg:text-9xl font-serif text-white font-bold leading-[0.9] tracking-tight text-balance">
                         {words.map((word, i) => (
                             <span key={i} className="inline-block mx-2 whitespace-nowrap overflow-hidden">
                                 <motion.span
@@ -175,7 +178,7 @@ const HeroSection = () => {
                                         delay: 1.8 + (i * 0.15),
                                         ease: [0.22, 1, 0.36, 1]
                                     }}
-                                    className="inline-block bg-clip-text text-transparent bg-gradient-to-b from-stone-100 to-stone-500"
+                                    className="inline-block bg-clip-text text-transparent bg-gradient-to-b from-white to-stone-300"
                                 >
                                     {word}
                                 </motion.span>
@@ -191,7 +194,7 @@ const HeroSection = () => {
                     >
                         <MagneticButton
                             onClick={() => navigate('/collection')}
-                            className="bg-white text-stone-950 px-10 py-5 rounded-full font-bold uppercase tracking-widest hover:bg-stone-200 shadow-[0_0_30px_rgba(255,255,255,0.2)] flex items-center gap-3 active:scale-95"
+                            className="bg-white text-stone-950 px-6 sm:px-10 py-4 sm:py-5 rounded-full font-bold uppercase tracking-widest hover:bg-stone-200 shadow-[0_0_30px_rgba(255,255,255,0.2)] flex items-center gap-3 active:scale-95 text-sm sm:text-base"
                         >
                             <span>Explore The Collection</span>
                             <span className="text-lg">➔</span>

@@ -36,16 +36,17 @@ const LuxuryStoneCard = ({ product, index, navigate, addToCart }) => {
             onMouseLeave={() => setIsHovered(false)}
             onClick={() => navigate(`/collection/${product.id}`)}
             className={cn(
-                "group relative bg-white/5 backdrop-blur-sm overflow-hidden md:cursor-none w-full", // Custom cursor area
-                isFeatured ? "md:col-span-2 md:row-span-2 aspect-[4/3] md:aspect-auto" : "md:col-span-1 aspect-[3/4]"
+                "group relative bg-white/5 backdrop-blur-sm overflow-hidden cursor-pointer w-full",
+                isFeatured ? "lg:col-span-2 lg:row-span-2 aspect-[4/3] lg:aspect-auto min-h-[300px]" : "col-span-1 aspect-[3/4]"
             )}
         >
             {/* Image Layer with Zoom/Pan Effect */}
             <div className="absolute inset-0 overflow-hidden bg-stone-200">
                 <motion.img
                     src={product.images[0]}
-                    alt={product.name}
+                    alt={`${product.name} - ${product.materialType} - ${product.finish} - Swamy Slabs India`}
                     className="w-full h-full object-cover"
+                    loading="lazy"
                     animate={{
                         scale: isHovered ? 1.15 : 1,
                         x: isHovered ? (cursorPosition.x / 50) : 0, // Subtle pan
@@ -170,7 +171,7 @@ const ProductListing = ({ products = [], showViewMore = true, enableSorting = fa
             </div>
 
             {/* Asymmetric Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 px-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 px-4">
                 <AnimatePresence mode="popLayout">
                     {filteredProducts.map((product, idx) => (
                         <LuxuryStoneCard

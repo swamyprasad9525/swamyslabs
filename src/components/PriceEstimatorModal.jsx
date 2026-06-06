@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check } from 'lucide-react';
 
-const PriceEstimatorModal = ({ isOpen, onClose, product }) => {
+const PriceEstimatorModal = ({ isOpen, onClose, product, onProceed }) => {
     const [area, setArea] = useState('');
     const [isBulk, setIsBulk] = useState(false);
     const [totalPrice, setTotalPrice] = useState(0);
@@ -127,9 +127,11 @@ const PriceEstimatorModal = ({ isOpen, onClose, product }) => {
                     <button
                         className="flex-1 px-4 py-3 bg-black text-white font-medium rounded-xl hover:bg-gray-800 transition-colors shadow-lg shadow-black/10"
                         onClick={() => {
-                            // Logic to share or proceed (placeholder for now)
-                            alert(`Estimate: ₹${totalPrice.toLocaleString()}`);
-                            onClose();
+                            if (onProceed) {
+                                onProceed(area, totalPrice);
+                            } else {
+                                onClose();
+                            }
                         }}
                     >
                         Proceed

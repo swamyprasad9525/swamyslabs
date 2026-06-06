@@ -5,15 +5,35 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// Security Middleware
+app.use(helmet());
+
+// CORS Configuration - Restrict to ALLOWED_ORIGIN in prod, allow all in dev
+const allowedOrigin = process.env.ALLOWED_ORIGIN;
+app.use(cors({
+    origin: allowedOrigin ? allowedOrigin.split(',') : '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
+
+// Rate Limiting: Limit each IP to 5 requests per 15 minutes
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5,
+    message: { error: 'Too many requests from this IP. Please try again after 15 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 // Nodemailer Transporter
 const transporter = nodemailer.createTransport({
@@ -37,12 +57,17 @@ const validatePhone = (phone) => {
 // Routes
 import multer from 'multer';
 
-// Configure Multer (Memory Storage for easy attachment handling)
+// Configure Multer (Memory Storage with 5MB file size limit)
 const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+const upload = multer({ 
+    storage: storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5 MB limit
+    }
+});
 
 // Routes
-app.post('/api/request-callback', async (req, res) => {
+app.post('/api/request-callback', apiLimiter, async (req, res) => {
     try {
         const { productName, customerName, phoneNumber, preferredTime, email, sourcePage } = req.body;
 
@@ -102,15 +127,30 @@ app.post('/api/request-callback', async (req, res) => {
         res.status(200).json({ message: 'Request received successfully' });
 
     } catch (error) {
-        res.status(500).json({ error: 'Failed to process request', details: error.message });
+        console.error('Callback request error:', error);
+        res.status(500).json({ error: 'Failed to process request' });
     }
 });
 
-// Enquiry Route with File Upload
-app.post('/api/send-enquiry', upload.single('file'), async (req, res) => {
+// Enquiry Route with File Upload and Mime Type Validation
+app.post('/api/send-enquiry', apiLimiter, upload.single('file'), async (req, res) => {
     try {
         const { productName, materialType, thickness, quantity, message } = req.body;
         const file = req.file;
+
+        // Validate file type if file is uploaded
+        if (file) {
+            const allowedMimeTypes = [
+                'image/jpeg',
+                'image/png',
+                'image/svg+xml',
+                'image/webp',
+                'application/pdf'
+            ];
+            if (!allowedMimeTypes.includes(file.mimetype)) {
+                return res.status(400).json({ error: 'Invalid file type. Only JPG, PNG, WEBP, SVG, and PDF files are allowed.' });
+            }
+        }
 
         // Email Content
         const mailOptions = {
@@ -143,8 +183,21 @@ app.post('/api/send-enquiry', upload.single('file'), async (req, res) => {
         res.status(200).json({ message: 'Enquiry sent successfully' });
 
     } catch (error) {
+        console.error('Enquiry request error:', error);
         res.status(500).json({ error: 'Failed to process enquiry' });
     }
+});
+
+// Global Error Handling Middleware (Handles multer file size limit and other errors cleanly)
+app.use((err, req, res, next) => {
+    if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ error: 'File size too large. Maximum limit is 5MB.' });
+        }
+        return res.status(400).json({ error: err.message });
+    }
+    console.error('Unhandled Express Error:', err);
+    res.status(500).json({ error: 'An internal server error occurred.' });
 });
 
 // Start Server
