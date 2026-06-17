@@ -7,8 +7,8 @@ const AboutSection = () => {
         "@context": "https://schema.org",
         "@type": "Organization",
         "name": "Swamy Slabs",
-        "url": "https://swamyslabs.com",
-        "logo": "https://swamyslabs.com/logo.png",
+        "url": "https://swamyslabs.vercel.app",
+        "logo": "https://swamyslabs.vercel.app/logo.png",
         "description": "Premium Indian Limestone Supplier and Manufacturer.",
         "address": {
             "@type": "PostalAddress",

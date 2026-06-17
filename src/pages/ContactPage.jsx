@@ -28,7 +28,7 @@ const ContactPage = () => {
                 title="Contact Us - Swamy Slabs | Indian Stone Exporter Kurnool AP"
                 description="Contact Swamy Slabs for premium Indian Limestone and Granite. Based in Betamcherla, Kurnool, Andhra Pradesh. Phone: +91 9381260584. Email: kolliswami784@gmail.com. Global stone export."
                 keywords="Contact Swamy Slabs, Stone Exporter Contact, Betamcherla Stone Supplier, Granite Supplier Kurnool, Limestone Supplier AP"
-                canonicalUrl="https://swamyslabs.com/contact"
+                canonicalUrl="https://swamyslabs.vercel.app/contact"
             />
             {/* 2. THE CORE EXPERIENCE: FORM & TABLETS */}
             <section className="relative px-4 md:px-8 lg:px-12 w-full overflow-hidden py-8 md:py-0">
@@ -48,9 +48,7 @@ const ContactPage = () => {
                             <div className="lg:sticky lg:top-32">
                                 <h3 className="text-2xl font-serif text-white mb-8 border-b border-stone-700 pb-4 inline-block">Direct Lines</h3>
                                 {/* Vertical Layout for Tablets to match screenshot expectation properly arranged */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-6">
-                                    <ContactTablets />
-                                </div>
+                                <ContactTablets />
                             </div>
                         </div>
 

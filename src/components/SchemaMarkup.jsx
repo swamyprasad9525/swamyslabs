@@ -5,13 +5,13 @@ const SchemaMarkup = () => {
     const localBusinessSchema = {
         "@context": "https://schema.org",
         "@type": "LocalBusiness",
-        "@id": "https://swamyslabs.com/#business",
+        "@id": "https://swamyslabs.vercel.app/#business",
         "name": "Swamy Slabs International",
         "alternateName": "Swamy Slabs",
-        "image": "https://swamyslabs.com/ssi_logo.png",
-        "logo": "https://swamyslabs.com/ssi_logo.png",
+        "image": "https://swamyslabs.vercel.app/ssi_logo.png",
+        "logo": "https://swamyslabs.vercel.app/ssi_logo.png",
         "description": "Premium Indian Limestone Exporter and Stone Calibration Services. Specializing in Tandur Yellow Sandstone, Kadappa Black Limestone, and Granite processing in Betamcherla, Kurnool, Andhra Pradesh.",
-        "url": "https://swamyslabs.com",
+        "url": "https://swamyslabs.vercel.app",
         "telephone": "+919381260584",
         "email": "kolliswami784@gmail.com",
         "priceRange": "₹₹",
@@ -97,12 +97,12 @@ const SchemaMarkup = () => {
     const organizationSchema = {
         "@context": "https://schema.org",
         "@type": "Organization",
-        "@id": "https://swamyslabs.com/#organization",
+        "@id": "https://swamyslabs.vercel.app/#organization",
         "name": "Swamy Slabs International",
-        "url": "https://swamyslabs.com",
+        "url": "https://swamyslabs.vercel.app",
         "logo": {
             "@type": "ImageObject",
-            "url": "https://swamyslabs.com/ssi_logo.png",
+            "url": "https://swamyslabs.vercel.app/ssi_logo.png",
             "width": 200,
             "height": 60
         },

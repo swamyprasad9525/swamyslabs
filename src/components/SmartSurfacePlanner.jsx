@@ -10,6 +10,24 @@ const SmartSurfacePlanner = () => {
     const [unit, setUnit] = useState('ft');
     const [includeWastage, setIncludeWastage] = useState(false);
     const [selectedMaterialId, setSelectedMaterialId] = useState(PREMIUM_STONES[0].id);
+    const [maxVisual, setMaxVisual] = useState(280);
+
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth < 400) {
+                setMaxVisual(160);
+            } else if (window.innerWidth < 640) {
+                setMaxVisual(200);
+            } else if (window.innerWidth < 1024) {
+                setMaxVisual(240);
+            } else {
+                setMaxVisual(280);
+            }
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Derived values
     const selectedMaterial = PREMIUM_STONES.find(s => s.id === selectedMaterialId) || PREMIUM_STONES[0];
@@ -65,8 +83,7 @@ const SmartSurfacePlanner = () => {
     const metrics = calculateMetrics();
 
     // Visual Scaling Logic
-    // Constrain the visual box within a max container of 300x300px
-    const maxVisual = 280;
+    // Constrain the visual box within a max container
     const aspectRatio = (parseFloat(width) || 1) / (parseFloat(length) || 1);
 
     let visualWidth = maxVisual;

@@ -24,7 +24,7 @@ const CollectionPage = () => {
                 title="Stone Collection - Premium Indian Limestone, Sandstone & Granite | Swamy Slabs"
                 description="Explore our premium collection of natural stones: Tandur Yellow Limestone, Kadappa Black, Napa Slabs, Sandstone, and Granite. Wholesale pricing, bulk supply from Betamcherla, AP."
                 keywords="Stone Collection, Indian Limestone, Tandur Stone, Kadappa Black, Granite Slabs, Natural Stone Catalogue, Napa Slabs, Betamcherla Stone, Wholesale Stone"
-                canonicalUrl="https://swamyslabs.com/collection"
+                canonicalUrl="https://swamyslabs.vercel.app/collection"
             />
             {/* Fixed Background Animation - Stays put while content scrolls */}
             <div className="fixed inset-0 z-0 pointer-events-none">

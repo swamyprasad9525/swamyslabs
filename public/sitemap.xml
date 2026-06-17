@@ -1,221 +1,198 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
-
   <url>
-    <loc>https://swamyslabs.com/</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/about</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/about</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/contact</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/contact</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
-
-  <!-- Product Pages -->
   <url>
-    <loc>https://swamyslabs.com/collection/1</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/1</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/tandur-yellow-limestone-cobble-premium.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/tandur-yellow-limestone-cobble-premium.png</image:loc>
       <image:title>Tandur Yellow Limestone Cobble (Premium)</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/2</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/2</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/tandur-yellow-pool-coping.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/tandur-yellow-pool-coping.png</image:loc>
       <image:title>Tandur Yellow Pool Coping</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/3</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/3</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/tandur-yellow-limestone-cobble-heavy.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/tandur-yellow-limestone-cobble-heavy.png</image:loc>
       <image:title>Tandur Yellow Limestone Cobble (Heavy)</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/4</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/4</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/kadappa-black-limestone-french-opus.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/kadappa-black-limestone-french-opus.png</image:loc>
       <image:title>Kadappa Black Limestone (French Opus)</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/5</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/5</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/tandur-yellow-limestone-french-opus.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/tandur-yellow-limestone-french-opus.png</image:loc>
       <image:title>Tandur Yellow Limestone (French Opus)</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/6</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/6</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/t-grey-sandstone.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/t-grey-sandstone.png</image:loc>
       <image:title>T. Grey Sandstone</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/7</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/7</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/t-yellow-sandstone.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/t-yellow-sandstone.png</image:loc>
       <image:title>T. Yellow Sandstone</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/8</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/8</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/napa-slabs-tumbled.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/napa-slabs-tumbled.png</image:loc>
       <image:title>Napa Slabs (Tumbled)</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/9</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/9</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/napa-slabs-machine-cut.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/napa-slabs-machine-cut.png</image:loc>
       <image:title>Napa Slabs (Machine Cut)</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/10</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/10</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/kadappa-stone-slab.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/kadappa-stone-slab.png</image:loc>
       <image:title>Kadappa Stone Slab</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/11</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/11</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/grey-polished-black-stone.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/grey-polished-black-stone.png</image:loc>
       <image:title>Grey Polished Black Stone</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/12</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/12</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/ash-grey-machine-cut.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/ash-grey-machine-cut.png</image:loc>
       <image:title>Ash Grey Machine Cut</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/13</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/13</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/beige-shabad-stones.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/beige-shabad-stones.png</image:loc>
       <image:title>Beige Shabad Stones</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/14</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/14</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/polished-betamcherla-white.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/polished-betamcherla-white.png</image:loc>
       <image:title>Polished Betamcherla White</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/15</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/15</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/tandur-yellow-brushed-finish.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/tandur-yellow-brushed-finish.png</image:loc>
       <image:title>Tandur Yellow (Brushed Finish)</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/16</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/16</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/kurnool-grey-leather-finish.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/kurnool-grey-leather-finish.png</image:loc>
       <image:title>Kurnool Grey Leather Finish</image:title>
     </image:image>
   </url>
-
   <url>
-    <loc>https://swamyslabs.com/collection/17</loc>
-    <lastmod>2026-06-06</lastmod>
+    <loc>https://swamyslabs.vercel.app/collection/17</loc>
+    <lastmod>2026-06-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
-      <image:loc>https://swamyslabs.com/tn-yellow-architectural-slab.png</image:loc>
+      <image:loc>https://swamyslabs.vercel.app/tn-yellow-architectural-slab.png</image:loc>
       <image:title>T.N Yellow Architectural Slab</image:title>
     </image:image>
   </url>
-
 </urlset>

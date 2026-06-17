@@ -167,7 +167,7 @@ const App = () => {
                 title="Swamy Slabs | Premium Indian Limestone & Natural Stone Exporter"
                 description="Swamy Slabs is a leading Indian Limestone Exporter and Stone Calibration Services provider. Specializing in Tandur Yellow, Kadappa Black, Sandstone & Granite slabs from Betamcherla, Kurnool, AP."
                 keywords="Indian Limestone Exporter, Stone Calibration Services, Tandur Yellow Sandstone, Natural Stone India, Kadappa Black Limestone, Flagstones, Granite Processing, Betamcherla Stone"
-                canonicalUrl="https://swamyslabs.com"
+                canonicalUrl="https://swamyslabs.vercel.app"
               />
               <SchemaMarkup />
               <HeroSection />
@@ -199,7 +199,7 @@ const App = () => {
                 title="About Swamy Slabs - Natural Stone Manufacturer & Exporter"
                 description="Discover Swamy Slabs — 20+ years of expertise in Indian Limestone, Granite, and precision stone calibration. Manufacturer & exporter from Betamcherla, Kurnool, Andhra Pradesh."
                 keywords="About Swamy Slabs, Stone Industry Legacy, Natural Stone Experts, Granite Processing History, Betamcherla Stone Manufacturer"
-                canonicalUrl="https://swamyslabs.com/about"
+                canonicalUrl="https://swamyslabs.vercel.app/about"
               />
               <div className="pt-5 min-h-screen bg-stone-50"><AboutSection /></div>
             </PageTransition>

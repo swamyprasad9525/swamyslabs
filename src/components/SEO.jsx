@@ -1,7 +1,7 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 
-const SITE_URL = 'https://swamyslabs.com';
+const SITE_URL = 'https://swamyslabs.vercel.app';
 const DEFAULT_OG_IMAGE = `${SITE_URL}/ssi_logo.png`;
 
 const SEO = ({ title, description, keywords, canonicalUrl, ogImage, noIndex = false }) => {

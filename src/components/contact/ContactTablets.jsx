@@ -35,7 +35,7 @@ const Tablet = ({ icon: Icon, title, lines, delay }) => {
 
 const ContactTablets = () => {
     return (
-        <div className="grid grid-cols-1 gap-6 w-full relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-1 gap-6 w-full relative z-10">
             <Tablet
                 icon={Mail}
                 title="Email Us"

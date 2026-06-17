@@ -159,7 +159,7 @@ const ProductDetailsPage = () => {
                     title={`${product.name} - ${product.materialType} Stone | Swamy Slabs`}
                     description={`Buy high-quality ${product.name} (${product.finish}) at ₹${product.pricePerSqFt}/sq.ft. ${product.description ? product.description.substring(0, 130) + '...' : 'Premium natural stone from India.'} Available in ${product.dimensions}.`}
                     keywords={`${product.name}, ${product.materialType}, Indian Stone, ${product.finish} finish, ${product.name} Price, Buy ${product.name}, Natural Stone India`}
-                    canonicalUrl={`https://swamyslabs.com/collection/${product.id}`}
+                    canonicalUrl={`https://swamyslabs.vercel.app/collection/${product.id}`}
                 />
                 <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
