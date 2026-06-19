@@ -64,26 +64,119 @@ const SchemaMarkup = () => {
             "itemListElement": [
                 {
                     "@type": "Offer",
+                    "priceCurrency": "INR",
+                    "price": "35.00",
+                    "priceSpecification": {
+                        "@type": "UnitPriceSpecification",
+                        "price": "35.00",
+                        "priceCurrency": "INR",
+                        "referenceQuantity": {
+                            "@type": "QuantitativeValue",
+                            "value": "1",
+                            "unitCode": "SQFT"
+                        }
+                    },
+                    "availability": "https://schema.org/InStock",
                     "itemOffered": {
                         "@type": "Product",
                         "name": "Tandur Yellow Limestone",
-                        "description": "Premium Indian Tandur Yellow Limestone slabs and cobbles for paving and cladding"
+                        "description": "Premium Indian Tandur Yellow Limestone slabs and cobbles for paving and cladding",
+                        "image": "https://swamyslabs.vercel.app/tandur-yellow-limestone-french-opus.png",
+                        "offers": {
+                            "@type": "Offer",
+                            "priceCurrency": "INR",
+                            "price": "35.00",
+                            "priceSpecification": {
+                                "@type": "UnitPriceSpecification",
+                                "price": "35.00",
+                                "priceCurrency": "INR",
+                                "referenceQuantity": {
+                                    "@type": "QuantitativeValue",
+                                    "value": "1",
+                                    "unitCode": "SQFT"
+                                }
+                            },
+                            "availability": "https://schema.org/InStock",
+                            "url": "https://swamyslabs.vercel.app/#products"
+                        }
                     }
                 },
                 {
                     "@type": "Offer",
+                    "priceCurrency": "INR",
+                    "price": "30.00",
+                    "priceSpecification": {
+                        "@type": "UnitPriceSpecification",
+                        "price": "30.00",
+                        "priceCurrency": "INR",
+                        "referenceQuantity": {
+                            "@type": "QuantitativeValue",
+                            "value": "1",
+                            "unitCode": "SQFT"
+                        }
+                    },
+                    "availability": "https://schema.org/InStock",
                     "itemOffered": {
                         "@type": "Product",
                         "name": "Kadappa Black Limestone",
-                        "description": "Classic Kadappa Black Limestone for flooring and wall cladding"
+                        "description": "Classic Kadappa Black Limestone for flooring and wall cladding",
+                        "image": "https://swamyslabs.vercel.app/kadappa-black-limestone-french-opus.png",
+                        "offers": {
+                            "@type": "Offer",
+                            "priceCurrency": "INR",
+                            "price": "30.00",
+                            "priceSpecification": {
+                                "@type": "UnitPriceSpecification",
+                                "price": "30.00",
+                                "priceCurrency": "INR",
+                                "referenceQuantity": {
+                                    "@type": "QuantitativeValue",
+                                    "value": "1",
+                                    "unitCode": "SQFT"
+                                }
+                            },
+                            "availability": "https://schema.org/InStock",
+                            "url": "https://swamyslabs.vercel.app/#products"
+                        }
                     }
                 },
                 {
                     "@type": "Offer",
+                    "priceCurrency": "INR",
+                    "price": "52.00",
+                    "priceSpecification": {
+                        "@type": "UnitPriceSpecification",
+                        "price": "52.00",
+                        "priceCurrency": "INR",
+                        "referenceQuantity": {
+                            "@type": "QuantitativeValue",
+                            "value": "1",
+                            "unitCode": "SQFT"
+                        }
+                    },
+                    "availability": "https://schema.org/InStock",
                     "itemOffered": {
                         "@type": "Product",
                         "name": "Napa Slabs",
-                        "description": "Large structural natural stone slabs for landscaping and architecture"
+                        "description": "Large structural natural stone slabs for landscaping and architecture",
+                        "image": "https://swamyslabs.vercel.app/napa-slabs-tumbled.png",
+                        "offers": {
+                            "@type": "Offer",
+                            "priceCurrency": "INR",
+                            "price": "52.00",
+                            "priceSpecification": {
+                                "@type": "UnitPriceSpecification",
+                                "price": "52.00",
+                                "priceCurrency": "INR",
+                                "referenceQuantity": {
+                                    "@type": "QuantitativeValue",
+                                    "value": "1",
+                                    "unitCode": "SQFT"
+                                }
+                            },
+                            "availability": "https://schema.org/InStock",
+                            "url": "https://swamyslabs.vercel.app/#products"
+                        }
                     }
                 }
             ]
