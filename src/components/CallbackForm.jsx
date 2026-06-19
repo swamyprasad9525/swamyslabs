@@ -29,7 +29,8 @@ const CallbackForm = ({ isOpen, onClose, product }) => {
         setStatus('submitting');
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/request-callback`, {
+            const apiBase = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000' : '');
+            const response = await fetch(`${apiBase}/api/request-callback`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

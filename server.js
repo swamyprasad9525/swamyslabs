@@ -200,7 +200,11 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'An internal server error occurred.' });
 });
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+// Start Server if not on Vercel
+if (!process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}
+
+export default app;
