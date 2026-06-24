@@ -23,9 +23,7 @@ const ProductDetailsPage = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('specs');
     const [quantity, setQuantity] = useState(10);
-    const [showStockCheck, setShowStockCheck] = useState(false);
-    const [pincode, setPincode] = useState('');
-    const [stockStatus, setStockStatus] = useState(null); // null, 'checking', 'available', 'unavailable'
+    const [showDeliveryInfo, setShowDeliveryInfo] = useState(false);
     const containerRef = useRef(null);
     const [unit, setUnit] = useState('piece');
     const [mainImage, setMainImage] = useState('');
@@ -111,14 +109,7 @@ const ProductDetailsPage = () => {
         showToast(`Estimate calculated! Opening detailed enquiry.`, 'info');
     };
 
-    const runStockCheck = () => {
-        if (!pincode) return;
-        setStockStatus('checking');
-        setTimeout(() => {
-            const random = Math.random();
-            setStockStatus(random > 0.2 ? 'available' : 'unavailable');
-        }, 1500);
-    };
+
 
     if (loading) return (
         <div className="min-h-screen flex justify-center items-center bg-stone-50">
@@ -316,19 +307,58 @@ const ProductDetailsPage = () => {
 
                             </motion.div>
 
-                            {/* Spec Table 1 */}
+                            {/* Spec Table */}
                             <div className="space-y-0 rounded-lg overflow-hidden border border-slate-100">
                                 {[
                                     { label: 'Business Type', value: 'Manufacturer, Supplier, Trader' },
                                     { label: 'Country of Origin', value: 'India' },
-                                    { label: 'Feature', value: 'Crack Resistance, Good Looking, Optimum Strength, Stain Resistance, Washable, Water Proof' },
-                                    { label: 'Size', value: `${product.dimensions || '2x2 feet,3x3 feet'}` },
+                                    { label: 'Finish', value: product.finish },
+                                    { label: 'Thickness', value: product.thickness },
+                                    { label: 'Feature', value: 'Crack Resistance, Optimum Strength, Stain Resistance, Water Proof' },
+                                    { label: 'Size', value: `${product.dimensions || '2x2 feet, 3x3 feet'}` },
                                 ].map((row, i) => (
                                     <div key={i} className={`flex p-4 gap-4 text-sm ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} border-b border-slate-100 last:border-0`}>
                                         <span className="w-1/3 text-slate-400 font-medium">{row.label}</span>
                                         <span className="w-2/3 text-slate-700 font-bold">{row.value}</span>
                                     </div>
                                 ))}
+                            </div>
+
+                            {/* Delivery Info Panel — replaces fake pincode check */}
+                            <div className="mt-4">
+                                <button
+                                    onClick={() => setShowDeliveryInfo(!showDeliveryInfo)}
+                                    className="w-full flex items-center justify-between gap-3 p-4 rounded-lg border border-dashed border-slate-300 bg-slate-50/60 hover:bg-slate-100 transition-colors text-sm font-medium text-slate-600 group"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <MapPin size={15} className="text-amber-600" />
+                                        Check delivery to your area
+                                    </span>
+                                    <ChevronRight size={15} className={`transition-transform duration-200 ${showDeliveryInfo ? 'rotate-90' : ''}`} />
+                                </button>
+                                {showDeliveryInfo && (
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="mt-2 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 space-y-2"
+                                    >
+                                        <p className="font-bold flex items-center gap-2">
+                                            <CheckCircle2 size={15} className="text-amber-600" /> We deliver across India & internationally.
+                                        </p>
+                                        <p className="text-amber-700 text-xs leading-relaxed">
+                                            Shipping available to all Indian states. For international orders (UAE, UK, USA, Australia, Europe), contact us for a custom freight quote based on your port.
+                                        </p>
+                                        <a
+                                            href="https://wa.me/919381260584?text=Hi%2C%20I%20would%20like%20to%20check%20delivery%20availability%20for%20my%20area."
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 mt-1 text-xs font-bold text-amber-800 underline underline-offset-2 hover:text-amber-600 transition-colors"
+                                        >
+                                            WhatsApp us to confirm your location →
+                                        </a>
+                                    </motion.div>
+                                )}
                             </div>
 
 

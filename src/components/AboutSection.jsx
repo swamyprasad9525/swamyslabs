@@ -46,7 +46,7 @@ const AboutSection = () => {
                         >
                             {/* High-quality stone yard image */}
                             <img
-                                src="/about.jpg"
+                                src="/about.webp"
                                 alt="Swamy Slabs stone yard - Tandur Yellow Limestone processing facility in Betamcherla, Kurnool"
                                 className="object-cover w-full h-full grayscale hover:grayscale-0 transition-all duration-700 ease-in-out"
                                 loading="lazy"

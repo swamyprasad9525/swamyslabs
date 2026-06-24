@@ -168,7 +168,7 @@ const ChiseledForm = () => {
                 id="phoneNumber"
                 label="Phone Number"
                 type="tel"
-                placeholder="+91 99999 99999"
+                placeholder="Enter Phone Number"
                 value={formData.phoneNumber}
                 onChange={handleInputChange}
             />

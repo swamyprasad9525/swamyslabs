@@ -34,6 +34,7 @@ const ProductSuggestions = ({ currentProductId, products = [] }) => {
                                 <img
                                     src={product.images[0]}
                                     alt={product.name}
+                                    loading="lazy"
                                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                 />
                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />

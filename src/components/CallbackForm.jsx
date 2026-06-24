@@ -111,7 +111,7 @@ const CallbackForm = ({ isOpen, onClose, product }) => {
                                     type="tel"
                                     required
                                     className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all"
-                                    placeholder="+91 98765 43210"
+                                    placeholder="Enter Phone Number"
                                     value={formData.phone}
                                     onChange={e => setFormData({ ...formData, phone: e.target.value })}
                                 />
