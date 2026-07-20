@@ -7,7 +7,7 @@ import CollectionPage from './pages/CollectionPage';
 import ProductDetailsPage from './pages/ProductDetailsPage';
 import ContactPage from './pages/ContactPage';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Routes, Route, useNavigate, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, Link, useLocation, Outlet } from 'react-router-dom';
 import { cn } from './lib/utils';
 
 import { useCart } from './context/CartContext';
@@ -19,6 +19,13 @@ import AboutSection from './components/AboutSection';
 import SmartSurfacePlanner from './components/SmartSurfacePlanner';
 import ScrollToTop from './components/common/ScrollToTop';
 import AIStoneRecommender from './components/AIStoneRecommender';
+
+import AdminLoginPage from './pages/admin/AdminLoginPage';
+import InvoiceListPage from './pages/admin/InvoiceListPage';
+import InvoiceFormPage from './pages/admin/InvoiceFormPage';
+import InvoiceViewPage from './pages/admin/InvoiceViewPage';
+import AdminGuard from './components/admin/AdminGuard';
+import { AdminProvider } from './context/AdminContext';
 
 import { PREMIUM_STONES } from './data/stones';
 
@@ -36,12 +43,15 @@ const PageTransition = ({ children }) => {
   );
 };
 
+// Simple passthrough layout for nested admin routes
+const AdminLayoutOutlet = () => <Outlet />;
 const App = () => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [featuredProducts, setFeaturedProducts] = useState(PREMIUM_STONES.slice(0, 3));
   const navigate = useNavigate();
   const location = useLocation();
   const { toggleCart, cartCount } = useCart();
+  const isAdminPage = location.pathname.startsWith('/admin');
 
   const navLinks = [
     { label: 'Collections', path: '/collection' },
@@ -53,7 +63,8 @@ const App = () => {
     <div className="min-h-screen bg-stone-50 selection:bg-stone-900 selection:text-white w-full overflow-x-hidden">
       <ScrollToTop />
 
-      {/* Navigation */}
+      {/* Navigation — hidden on admin pages which have their own top bar */}
+      {!isAdminPage && (
       <nav className="glass-nav w-full z-50 transition-all duration-300">
         <div className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
           {/* Logo */}
@@ -159,6 +170,7 @@ const App = () => {
           )}
         </AnimatePresence>
       </nav>
+      )}{/* end !isAdminPage nav */}
 
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
@@ -222,126 +234,145 @@ const App = () => {
               <ContactPage />
             </PageTransition>
           } />
+          {/* ── Admin Routes (AdminProvider wraps all for shared auth context) ── */}
+          <Route path="/admin" element={<AdminProvider><AdminLayoutOutlet /></AdminProvider>}>
+            <Route path="login" element={<AdminLoginPage />} />
+            <Route path="invoices" element={<AdminGuard><InvoiceListPage /></AdminGuard>} />
+            <Route path="invoices/new" element={<AdminGuard><InvoiceFormPage /></AdminGuard>} />
+            <Route path="invoices/:id" element={<AdminGuard><InvoiceViewPage /></AdminGuard>} />
+          </Route>
         </Routes>
       </AnimatePresence>
 
-      {/* Footer */}
-      <footer className="py-12 bg-black relative overflow-hidden">
-        {/* Animated Background Text - hidden on small screens to prevent overflow */}
-        <div className="absolute inset-x-0 bottom-[-10%] z-0 hidden md:flex justify-center pointer-events-none select-none overflow-hidden">
-          <motion.p
-            initial={{ opacity: 0, y: 100 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: "easeOut" }}
-            className="text-[12vw] font-black text-[#1c1917] uppercase tracking-tighter whitespace-nowrap leading-none"
-            style={{
-              textShadow: '0px 20px 50px rgba(0,0,0,0.5)',
-              maskImage: 'linear-gradient(to bottom, black 90%, transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(to bottom, black 90%, transparent 100%)'
-            }}
+      {!isAdminPage && (
+        <>
+          {/* Footer */}
+          <footer className="py-12 bg-black relative overflow-hidden">
+            {/* Animated Background Text - hidden on small screens to prevent overflow */}
+            <div className="absolute inset-x-0 bottom-[-10%] z-0 hidden md:flex justify-center pointer-events-none select-none overflow-hidden">
+              <motion.p
+                initial={{ opacity: 0, y: 100 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 1, ease: "easeOut" }}
+                className="text-[12vw] font-black text-[#1c1917] uppercase tracking-tighter whitespace-nowrap leading-none"
+                style={{
+                  textShadow: '0px 20px 50px rgba(0,0,0,0.5)',
+                  maskImage: 'linear-gradient(to bottom, black 90%, transparent 100%)',
+                  WebkitMaskImage: 'linear-gradient(to bottom, black 90%, transparent 100%)'
+                }}
+              >
+                swamy slabs
+              </motion.p>
+            </div>
+
+            <div className="container mx-auto px-4 relative z-10">
+              <div className="bg-[#111] rounded-2xl md:rounded-3xl p-6 md:p-8 lg:p-16 shadow-2xl shadow-black border border-stone-800">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 mb-10 md:mb-16">
+
+                  {/* Brand Section */}
+                  <div className="md:col-span-4 space-y-4 md:space-y-6">
+                    <Link to="/" className="text-2xl md:text-3xl font-serif font-bold tracking-tighter text-white flex items-center gap-2">
+                      SWAMY SLABS
+                    </Link>
+                    <p className="text-stone-400 text-sm leading-relaxed max-w-xs">
+                      Masterfully refined stone for timeless architecture. Specializing in custom shaping, expert tumbling, and precision calibration.
+                    </p>
+                    {/* Social Icons */}
+                    <div className="flex space-x-4 pt-2">
+                      {/* WhatsApp — real link */}
+                      <a href="https://wa.me/919381260584" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="text-stone-500 hover:text-white transition">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                      </a>
+                      {/* Add your real Instagram/Facebook URLs below when ready */}
+                      {/* <a href="https://instagram.com/YOUR_HANDLE" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-stone-500 hover:text-white transition"> ... </a> */}
+                    </div>
+                  </div>
+
+                  {/* Links Sections */}
+                  <div className="md:col-span-8 grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 md:pl-12">
+                    <div>
+                      <h4 className="font-bold text-white mb-4 md:mb-6 text-sm uppercase tracking-widest">Collections</h4>
+                      <ul className="space-y-3 text-sm text-stone-400 font-medium">
+                        <li><Link to="/collection" className="hover:text-white transition-colors">Granite Slabs</Link></li>
+                        <li><Link to="/collection" className="hover:text-white transition-colors">Sandstone</Link></li>
+                        <li><Link to="/collection" className="hover:text-white transition-colors">Limestone</Link></li>
+                        <li><Link to="/collection" className="hover:text-white transition-colors">Cobbles</Link></li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white mb-4 md:mb-6 text-sm uppercase tracking-widest">Contact Us</h4>
+                      <ul className="space-y-3 text-sm text-stone-400 font-medium">
+                        <li>
+                          <a href="mailto:kolliswami784@gmail.com" className="hover:text-white transition-colors break-all">
+                            kolliswami784@gmail.com
+                          </a>
+                        </li>
+                        <li>
+                          <a href="tel:+919381260584" className="hover:text-white transition-colors">
+                            +91 93812 60584
+                          </a>
+                        </li>
+                        <li className="leading-relaxed">
+                          Kurnool Road, 31,<br />Bugganapalli,<br />Betamcherla, AP 518599
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="col-span-2 md:col-span-1">
+                      <h4 className="font-bold text-white mb-4 md:mb-6 text-sm uppercase tracking-widest">Company</h4>
+                      <ul className="space-y-3 text-sm text-stone-400 font-medium">
+                        <li><Link to="/about" className="hover:text-white transition-colors">About Swamy Slabs</Link></li>
+                        <li><Link to="/contact" className="hover:text-white transition-colors">Contact Us</Link></li>
+                        <li>
+                          <a href="https://wa.me/919381260584?text=Hi, I am interested in your stone products." target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
+                            WhatsApp Us
+                          </a>
+                        </li>
+                        <li>
+                          <Link to="/admin/login" className="hover:text-white transition-colors flex items-center gap-1.5 opacity-60 hover:opacity-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                            </svg>
+                            Admin Portal
+                          </Link>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Bar */}
+                <div className="pt-6 md:pt-8 border-t border-stone-800 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs font-medium text-stone-500">
+                  <div>©{new Date().getFullYear()} Swamy Slabs International. All rights reserved.</div>
+                  <div className="flex gap-4">
+                    <span>Betamcherla, Kurnool, AP</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </footer>
+
+          {/* Global WhatsApp Floating Button */}
+          <a
+            href="https://wa.me/919381260584?text=Hi,%20I%20am%20interested%20in%20your%20stone%20products."
+            target="_blank"
+            rel="noopener noreferrer"
+            className="fixed bottom-6 right-6 z-[60] group"
+            aria-label="Chat on WhatsApp"
           >
-            swamy slabs
-          </motion.p>
-        </div>
-
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="bg-[#111] rounded-2xl md:rounded-3xl p-6 md:p-8 lg:p-16 shadow-2xl shadow-black border border-stone-800">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 mb-10 md:mb-16">
-
-              {/* Brand Section */}
-              <div className="md:col-span-4 space-y-4 md:space-y-6">
-                <Link to="/" className="text-2xl md:text-3xl font-serif font-bold tracking-tighter text-white flex items-center gap-2">
-                  SWAMY SLABS
-                </Link>
-                <p className="text-stone-400 text-sm leading-relaxed max-w-xs">
-                  Masterfully refined stone for timeless architecture. Specializing in custom shaping, expert tumbling, and precision calibration.
-                </p>
-                {/* Social Icons */}
-                <div className="flex space-x-4 pt-2">
-                  {/* WhatsApp — real link */}
-                  <a href="https://wa.me/919381260584" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="text-stone-500 hover:text-white transition">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
-                  </a>
-                  {/* Add your real Instagram/Facebook URLs below when ready */}
-                  {/* <a href="https://instagram.com/YOUR_HANDLE" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-stone-500 hover:text-white transition"> ... </a> */}
-                </div>
-              </div>
-
-              {/* Links Sections */}
-              <div className="md:col-span-8 grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 md:pl-12">
-                <div>
-                  <h4 className="font-bold text-white mb-4 md:mb-6 text-sm uppercase tracking-widest">Collections</h4>
-                  <ul className="space-y-3 text-sm text-stone-400 font-medium">
-                    <li><Link to="/collection" className="hover:text-white transition-colors">Granite Slabs</Link></li>
-                    <li><Link to="/collection" className="hover:text-white transition-colors">Sandstone</Link></li>
-                    <li><Link to="/collection" className="hover:text-white transition-colors">Limestone</Link></li>
-                    <li><Link to="/collection" className="hover:text-white transition-colors">Cobbles</Link></li>
-                  </ul>
-                </div>
-                <div>
-                  <h4 className="font-bold text-white mb-4 md:mb-6 text-sm uppercase tracking-widest">Contact Us</h4>
-                  <ul className="space-y-3 text-sm text-stone-400 font-medium">
-                    <li>
-                      <a href="mailto:kolliswami784@gmail.com" className="hover:text-white transition-colors break-all">
-                        kolliswami784@gmail.com
-                      </a>
-                    </li>
-                    <li>
-                      <a href="tel:+919381260584" className="hover:text-white transition-colors">
-                        +91 93812 60584
-                      </a>
-                    </li>
-                    <li className="leading-relaxed">
-                      Kurnool Road, 31,<br />Bugganapalli,<br />Betamcherla, AP 518599
-                    </li>
-                  </ul>
-                </div>
-                <div className="col-span-2 md:col-span-1">
-                  <h4 className="font-bold text-white mb-4 md:mb-6 text-sm uppercase tracking-widest">Company</h4>
-                  <ul className="space-y-3 text-sm text-stone-400 font-medium">
-                    <li><Link to="/about" className="hover:text-white transition-colors">About Swamy Slabs</Link></li>
-                    <li><Link to="/contact" className="hover:text-white transition-colors">Contact Us</Link></li>
-                    <li>
-                      <a href="https://wa.me/919381260584?text=Hi, I am interested in your stone products." target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">
-                        WhatsApp Us
-                      </a>
-                    </li>
-                  </ul>
-                </div>
+            <div className="bg-[#25D366] text-white p-3.5 md:p-4 rounded-full shadow-2xl cursor-pointer hover:bg-[#20bd5a] transition-all hover:scale-110 active:scale-95 relative flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="fill-white">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+              </svg>
+              <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-white text-stone-900 px-3 py-2 rounded-xl shadow-lg text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none hidden md:flex items-center gap-2">
+                Chat on WhatsApp
               </div>
             </div>
+          </a>
 
-            {/* Bottom Bar */}
-            <div className="pt-6 md:pt-8 border-t border-stone-800 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs font-medium text-stone-500">
-              <div>©{new Date().getFullYear()} Swamy Slabs International. All rights reserved.</div>
-              <div className="flex gap-4">
-                <span>Betamcherla, Kurnool, AP</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
-
-      {/* Global WhatsApp Floating Button */}
-      <a
-        href="https://wa.me/919381260584?text=Hi,%20I%20am%20interested%20in%20your%20stone%20products."
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-[60] group"
-        aria-label="Chat on WhatsApp"
-      >
-        <div className="bg-[#25D366] text-white p-3.5 md:p-4 rounded-full shadow-2xl cursor-pointer hover:bg-[#20bd5a] transition-all hover:scale-110 active:scale-95 relative flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="fill-white">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-          </svg>
-          <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-white text-stone-900 px-3 py-2 rounded-xl shadow-lg text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none hidden md:flex items-center gap-2">
-            Chat on WhatsApp
-          </div>
-        </div>
-      </a>
-
-      <CartDrawer />
-      <LeadCapturePopup />
+          <CartDrawer />
+          <LeadCapturePopup />
+        </>
+      )}
     </div>
   );
 }

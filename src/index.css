@@ -107,4 +107,46 @@
     padding-left: 1rem;
     padding-right: 1rem;
   }
-}
+}
+
+/* ── Print styles — hide site chrome, show only the invoice ──────────────── */
+@media print {
+  /* Hide everything that is not part of the invoice */
+  nav,
+  footer,
+  .glass-nav,
+  .no-print,
+  a[href^="https://wa.me"],
+  [aria-label="Chat on WhatsApp"],
+  #cart-drawer,
+  #lead-capture-popup {
+    display: none !important;
+  }
+
+  /* Remove backgrounds / shadows to save ink */
+  body, html {
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Let the invoice print full-width */
+  .invoice-print-root {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Avoid page breaks inside table rows */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Force black text on white for best print quality */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

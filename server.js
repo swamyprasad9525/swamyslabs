@@ -7,11 +7,37 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import mongoose from 'mongoose';
+
+// Route modules
+import invoicesRouter from './src-server/routes/invoices.js';
+import adminRouter from './src-server/routes/admin.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// ── MongoDB connection (cached for Vercel serverless cold starts) ──────────────
+let mongoConnected = false;
+async function connectDB() {
+    if (mongoConnected || mongoose.connection.readyState === 1) return;
+    if (!process.env.MONGODB_URI) {
+        console.warn('MONGODB_URI not set — invoice features will not work.');
+        return;
+    }
+    try {
+        await mongoose.connect(process.env.MONGODB_URI, {
+            bufferCommands: false,
+            serverSelectionTimeoutMS: 5000,
+        });
+        mongoConnected = true;
+        console.log('MongoDB connected.');
+    } catch (err) {
+        console.error('MongoDB connection error:', err.message);
+    }
+}
+connectDB();
 
 // Security Middleware
 app.use(helmet());
@@ -20,7 +46,7 @@ app.use(helmet());
 const allowedOrigin = process.env.ALLOWED_ORIGIN;
 app.use(cors({
     origin: allowedOrigin ? allowedOrigin.split(',') : '*',
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -187,6 +213,10 @@ app.post('/api/send-enquiry', apiLimiter, upload.single('file'), async (req, res
         res.status(500).json({ error: 'Failed to process enquiry' });
     }
 });
+
+// ── Invoice & Admin routes ─────────────────────────────────────────────────────
+app.use('/api/invoices', invoicesRouter);
+app.use('/api/admin',    adminRouter);
 
 // Global Error Handling Middleware (Handles multer file size limit and other errors cleanly)
 app.use((err, req, res, next) => {
