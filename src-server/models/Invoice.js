@@ -45,6 +45,33 @@ const packingSchema = new Schema({
   piecesPerCrate: { type: Number },
 }, { _id: false });
 
+const dispatchSchema = new Schema({
+  address: { type: String },
+  place:   { type: String },
+  pincode: { type: String },
+  state:   { type: String },
+}, { _id: false });
+
+const shipToSchema = new Schema({
+  address: { type: String },
+  place:   { type: String },
+  pincode: { type: String },
+  state:   { type: String },
+}, { _id: false });
+
+const transportationSchema = new Schema({
+  transporterId:   { type: String },
+  transporterName: { type: String },
+  distanceKm:      { type: String },
+}, { _id: false });
+
+const partBSchema = new Schema({
+  mode:          { type: String, default: 'Road' },
+  vehicleType:   { type: String, default: 'Regular' },
+  vehicleNumber: { type: String },
+  docNoDate:     { type: String },
+}, { _id: false });
+
 // ── Main Invoice schema ───────────────────────────────────────────────────────
 
 const invoiceSchema = new Schema({
@@ -59,18 +86,26 @@ const invoiceSchema = new Schema({
     ],
     default: 'ORIGINAL FOR RECIPIENT',
   },
-  poNumber:       { type: String },
-  transportMode:  { type: String, default: 'By Lorry' },
-  vehicleNumber:  { type: String },
-  placeOfSupply:  { type: String },
+  supplyType:      { type: String, default: 'Outward' },
+  subType:         { type: String, default: 'Supply' },
+  docType:         { type: String, default: 'Tax Invoice' },
+  transactionType: { type: String, default: 'Regular' },
+  poNumber:        { type: String },
+  transportMode:   { type: String, default: 'By Lorry' },
+  vehicleNumber:   { type: String },
+  placeOfSupply:   { type: String },
 
-  seller:     { type: sellerSchema, required: true },
-  buyer:      { type: partySchema, required: true },
-  consignee:  { type: consigneeSchema, required: true },
+  seller:       { type: sellerSchema, required: true },
+  dispatchFrom: { type: dispatchSchema },
+  buyer:        { type: partySchema, required: true },
+  consignee:    { type: consigneeSchema, required: true },
+  shipToDetails:{ type: shipToSchema },
 
   lineItems: { type: [lineItemSchema], required: true, validate: v => v.length > 0 },
 
-  packing: { type: packingSchema },
+  packing:        { type: packingSchema },
+  transportation: { type: transportationSchema },
+  partB:          { type: partBSchema },
 
   // Computed fields — always set server-side
   taxableValue:  { type: Number, required: true },

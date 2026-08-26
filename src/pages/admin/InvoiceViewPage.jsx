@@ -2,15 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAdmin } from '../../context/AdminContext';
 import InvoicePrint from '../../components/admin/InvoicePrint';
+import AdminHeader from '../../components/admin/AdminHeader';
+import { ArrowLeft, Printer, Download, FileText, AlertCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function InvoiceViewPage() {
   const { id } = useParams();
   const { authFetch, logout } = useAdmin();
   const navigate = useNavigate();
 
-  const [invoice, setInvoice]   = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
+  const [invoice, setInvoice]     = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
   const [dlLoading, setDlLoading] = useState(false);
 
   useEffect(() => {
@@ -19,7 +22,7 @@ export default function InvoiceViewPage() {
         const res = await authFetch(`/api/invoices/${id}`);
         if (res.status === 401) { logout(); return; }
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Not found');
+        if (!res.ok) throw new Error(data.error || 'Invoice not found');
         setInvoice(data.invoice);
       } catch (err) {
         setError(err.message);
@@ -30,10 +33,11 @@ export default function InvoiceViewPage() {
   }, [id, authFetch, logout]);
 
   const downloadExcel = async () => {
+    if (!invoice) return;
     setDlLoading(true);
     try {
       const res = await authFetch(`/api/invoices/${id}/excel`);
-      if (!res.ok) { alert('Export failed'); return; }
+      if (!res.ok) { throw new Error('Export failed'); }
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
@@ -41,68 +45,85 @@ export default function InvoiceViewPage() {
       a.download = `Invoice_${(invoice.invoiceNumber || id).replace(/\//g, '-')}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch { alert('Export failed'); }
-    finally  { setDlLoading(false); }
+    } catch {
+      alert('Failed to download Excel export');
+    } finally {
+      setDlLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 font-sans">
-      {/* Top bar */}
-      <div className="no-print bg-stone-900 px-6 py-4 flex items-center justify-between shadow-md">
-        <div className="flex items-center gap-4">
-          <Link to="/admin/invoices" className="text-stone-400 hover:text-white text-sm font-semibold transition-colors no-underline">
-            ← Back to Invoices
-          </Link>
-          {invoice && (
-            <span className="text-white text-base font-extrabold tracking-tight hidden sm:inline">
-              Invoice {invoice.invoiceNumber}
-            </span>
-          )}
-        </div>
+    <div className="min-h-screen bg-stone-100 font-sans selection:bg-amber-400 selection:text-stone-950 pb-16">
+      <AdminHeader title={`Invoice ${invoice ? invoice.invoiceNumber : 'Viewer'}`} />
 
-        {invoice && (
-          <div className="flex gap-3">
-            <button
-              id="download-excel-btn"
-              onClick={downloadExcel}
-              disabled={dlLoading}
-              className="bg-stone-700 hover:bg-stone-600 text-white border-none px-5 py-2.5 rounded-lg cursor-pointer text-sm font-bold transition-all shadow-sm active:scale-95 disabled:opacity-75 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {dlLoading ? (
-                <>⏳ Exporting…</>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                  Download Excel
-                </>
-              )}
-            </button>
-            <button
-              id="print-invoice-btn"
-              onClick={() => window.print()}
-              className="bg-stone-800 hover:bg-stone-700 text-white border-none px-5 py-2.5 rounded-lg cursor-pointer text-sm font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-              Print
-            </button>
-          </div>
-        )}
+      {/* Action Toolbar */}
+      <div className="no-print bg-white border-b border-stone-200 shadow-sm py-3.5 px-4 sm:px-6 sticky top-[57px] z-40">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+          
+          <Link
+            to="/admin/invoices"
+            className="text-stone-600 hover:text-stone-950 text-xs font-bold transition flex items-center gap-1.5 no-underline"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Invoices</span>
+          </Link>
+
+          {invoice && (
+            <div className="flex items-center gap-3">
+              <button
+                id="download-excel-btn"
+                onClick={downloadExcel}
+                disabled={dlLoading}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white border-none px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-75 cursor-pointer flex items-center gap-1.5"
+              >
+                {dlLoading ? (
+                  <>⏳ Exporting…</>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>Download Excel</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                id="print-invoice-btn"
+                onClick={() => window.print()}
+                className="bg-stone-950 hover:bg-stone-800 text-amber-400 border-none px-4 py-2 rounded-xl text-xs font-black transition-all shadow-sm active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-amber-400" />
+                <span>Print Invoice</span>
+              </button>
+            </div>
+          )}
+
+        </div>
       </div>
 
-      {/* Content */}
-      <div className="px-4 sm:px-6 py-8 sm:py-10 max-w-5xl mx-auto">
+      {/* Content View */}
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
         {loading && (
-          <div className="text-center py-20 text-stone-500 font-medium animate-pulse">Loading invoice…</div>
+          <div className="bg-white rounded-2xl p-20 border border-stone-200 text-center text-stone-500 font-bold animate-pulse space-y-3">
+            <div className="w-10 h-10 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
+            <div>Loading invoice document details…</div>
+          </div>
         )}
+
         {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-200 mb-6 font-medium">
-            {error}
+          <div className="bg-rose-50 text-rose-700 p-5 rounded-2xl border border-rose-200 text-xs font-bold flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-rose-600" />
+            <span>{error}</span>
           </div>
         )}
+
         {invoice && (
-          <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-6 sm:p-10 overflow-x-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-2xl shadow-xl border border-stone-300 p-6 sm:p-10 overflow-x-auto"
+          >
             <InvoicePrint invoice={invoice} />
-          </div>
+          </motion.div>
         )}
       </div>
     </div>
