@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAdmin } from '../../context/AdminContext';
 import InvoicePrint from '../../components/admin/InvoicePrint';
-import AdminHeader from '../../components/admin/AdminHeader';
 import { ArrowLeft, Printer, Download, FileText, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -54,10 +53,8 @@ export default function InvoiceViewPage() {
 
   return (
     <div className="min-h-screen bg-stone-100 font-sans selection:bg-amber-400 selection:text-stone-950 pb-16">
-      <AdminHeader title={`Invoice ${invoice ? invoice.invoiceNumber : 'Viewer'}`} />
-
       {/* Action Toolbar */}
-      <div className="no-print bg-white border-b border-stone-200 shadow-sm py-3.5 px-4 sm:px-6 sticky top-[57px] z-40">
+      <div className="no-print bg-white border-b border-stone-200 shadow-sm py-3.5 px-4 sm:px-6 sticky top-16 z-20">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           
           <Link

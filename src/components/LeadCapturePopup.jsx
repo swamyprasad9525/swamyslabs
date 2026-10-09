@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowRight, Phone, Mail, Check} from 'lucide-react';
 import Cookies from 'js-cookie';
+import { apiRequest, createSubmissionId } from '../lib/api';
 
 const LeadCapturePopup = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -9,6 +10,8 @@ const LeadCapturePopup = () => {
     const [formData, setFormData] = useState({ email: '', phone: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [reference, setReference] = useState('');
+    const submissionIdRef = useRef(createSubmissionId());
 
     useEffect(() => {
         // Trigger immediately on mount (refresh)
@@ -31,26 +34,22 @@ const LeadCapturePopup = () => {
         setLoading(true);
 
         try {
-            const apiBase = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000' : '');
-            const response = await fetch(`${apiBase}/api/request-callback`, {
+            const result = await apiRequest('/api/request-callback', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    submissionId: submissionIdRef.current,
+                    source: 'CATALOG_REQUEST',
                     phoneNumber: formData.phone,
                     email: formData.email,
                     productName: 'Lead Capture Popup',
-                    sourcePage: window.location.href // Track exact page
+                    sourcePage: `${window.location.pathname}${window.location.search}`,
                 }),
             });
-
-            if (response.ok) {
-                setStep(2);
-                // Stop-on-Success: Disable for 30 days
-                Cookies.set('lead_captured', 'true', { expires: 30 });
-            } else {
-                const data = await response.json();
-                setError(data.error || 'Something went wrong');
-            }
+            setReference(result.reference || '');
+            setStep(2);
+            submissionIdRef.current = createSubmissionId();
+            // Stop-on-Success: Disable for 30 days
+            Cookies.set('lead_captured', 'true', { expires: 30 });
         } catch (err) {
             setError('Failed to connect to server');
         } finally {
@@ -157,8 +156,9 @@ const LeadCapturePopup = () => {
                                         You're In!
                                     </h3>
                                     <p className="text-stone-500 text-sm mb-8">
-                                        Thank you for connecting. As promised, here is your catalog.
+                                        Thank you for connecting. Your request has been saved for review.
                                     </p>
+                                    {reference && <p className="text-xs font-semibold text-stone-700">Reference: {reference}</p>}
                                 </motion.div>
                             )}
                         </div>

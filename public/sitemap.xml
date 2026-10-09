@@ -3,31 +3,37 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://swamyslabs.vercel.app/</loc>
-    <lastmod>2026-08-26</lastmod>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://swamyslabs.vercel.app/project-planner</loc>
+    <lastmod>2026-10-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://swamyslabs.vercel.app/about</loc>
-    <lastmod>2026-08-26</lastmod>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://swamyslabs.vercel.app/contact</loc>
-    <lastmod>2026-08-26</lastmod>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/1</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/tandur-yellow-limestone-cobble-premium</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -36,8 +42,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/2</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/tandur-yellow-pool-coping</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -46,8 +52,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/3</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/tandur-yellow-limestone-cobble-heavy</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -56,8 +62,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/4</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/kadappa-black-limestone-french-opus</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -66,8 +72,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/5</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/tandur-yellow-limestone-french-opus</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -76,8 +82,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/6</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/t-grey-sandstone</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -86,8 +92,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/7</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/t-yellow-sandstone</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -96,8 +102,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/8</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/napa-slabs-tumbled</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -106,8 +112,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/9</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/napa-slabs-machine-cut</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -116,8 +122,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/10</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/kadappa-stone-slab</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -126,8 +132,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/11</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/grey-polished-black-stone</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -136,8 +142,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/12</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/ash-grey-machine-cut</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -146,8 +152,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/13</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/beige-shabad-stones</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -156,8 +162,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/14</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/polished-betamcherla-white</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -166,8 +172,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/15</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/tandur-yellow-brushed-finish</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -176,8 +182,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/16</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/kurnool-grey-leather-finish</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>
@@ -186,8 +192,8 @@
     </image:image>
   </url>
   <url>
-    <loc>https://swamyslabs.vercel.app/collection/17</loc>
-    <lastmod>2026-08-26</lastmod>
+    <loc>https://swamyslabs.vercel.app/stones/tn-yellow-architectural-slab</loc>
+    <lastmod>2026-10-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <image:image>

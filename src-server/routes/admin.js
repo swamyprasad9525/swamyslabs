@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
+import { validateAdminLogin } from '../utils/validation.js';
 
 const router = Router();
 
@@ -9,11 +10,10 @@ const router = Router();
  * Returns: { token: string }  (JWT valid for 24 hours)
  */
 router.post('/login', (req, res) => {
-  const { password } = req.body;
-
-  if (!password) {
-    return res.status(400).json({ error: 'Password is required.' });
-  }
+  res.set('Cache-Control', 'no-store');
+  const validated = validateAdminLogin(req.body);
+  if (validated.error) return res.status(400).json({ error: validated.error });
+  const { password } = validated.value;
 
   const adminPassword = process.env.ADMIN_PASSWORD;
 
@@ -23,13 +23,13 @@ router.post('/login', (req, res) => {
   }
 
   if (password !== adminPassword) {
-    return res.status(401).json({ error: 'Incorrect password.' });
+    return res.status(401).json({ error: 'Invalid credentials.' });
   }
 
   const token = jwt.sign(
     { role: 'admin' },
     process.env.JWT_SECRET,
-    { expiresIn: '24h' }
+    { expiresIn: '24h', algorithm: 'HS256' }
   );
 
   res.json({ token });

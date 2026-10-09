@@ -9,12 +9,17 @@ import {
   computeTotals,
 } from '../utils/invoiceHelpers.js';
 import ExcelJS from 'exceljs';
+import mongoose from 'mongoose';
+import { escapeRegex } from '../utils/security.js';
+import { parseInvoiceListQuery, validateInvoiceInput } from '../utils/validation.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/invoices  — create a new invoice
 // ─────────────────────────────────────────────────────────────────────────────
 export async function createInvoice(req, res) {
   try {
+    const validation = validateInvoiceInput(req.body);
+    if (validation.error) return res.status(400).json({ error: validation.error });
     const {
       invoiceDate = new Date(),
       copyType,
@@ -118,20 +123,16 @@ export async function createInvoice(req, res) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function listInvoices(req, res) {
   try {
-    const {
-      page = 1,
-      limit = 20,
-      search,
-      from,
-      to,
-    } = req.query;
+    const validation = parseInvoiceListQuery(req.query);
+    if (validation.error) return res.status(400).json({ error: validation.error });
+    const { page, limit, search, from, to } = validation.value;
 
     const filter = {};
 
     if (search) {
       filter.$or = [
-        { invoiceNumber: { $regex: search, $options: 'i' } },
-        { 'buyer.name': { $regex: search, $options: 'i' } },
+        { invoiceNumber: { $regex: escapeRegex(search), $options: 'i' } },
+        { 'buyer.name': { $regex: escapeRegex(search), $options: 'i' } },
       ];
     }
 
@@ -141,17 +142,17 @@ export async function listInvoices(req, res) {
       if (to) filter.invoiceDate.$lte = new Date(to);
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
+    const skip = (page - 1) * limit;
     const [invoices, total] = await Promise.all([
       Invoice.find(filter)
         .sort({ invoiceDate: -1, createdAt: -1 })
         .skip(skip)
-        .limit(Number(limit))
+        .limit(limit)
         .select('invoiceNumber invoiceDate copyType buyer.name grandTotal taxType'),
       Invoice.countDocuments(filter),
     ]);
 
-    res.json({ invoices, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+    res.json({ invoices, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
     console.error('listInvoices error:', err);
     res.status(500).json({ error: 'Failed to fetch invoices.' });
@@ -163,6 +164,7 @@ export async function listInvoices(req, res) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function getInvoice(req, res) {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'Invalid invoice ID.' });
     const invoice = await Invoice.findById(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found.' });
     res.json({ invoice });
@@ -177,6 +179,7 @@ export async function getInvoice(req, res) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function exportInvoiceExcel(req, res) {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'Invalid invoice ID.' });
     const invoice = await Invoice.findById(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found.' });
 

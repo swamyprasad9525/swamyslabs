@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAdmin } from '../../context/AdminContext';
 import InvoicePrint from '../../components/admin/InvoicePrint';
-import AdminHeader from '../../components/admin/AdminHeader';
 import { PREMIUM_STONES } from '../../data/stones';
 import { INDIAN_GST_STATES, getStateCodeByName } from '../../data/gstStates';
 import { 
@@ -332,8 +331,6 @@ export default function InvoiceFormPage() {
 
   return (
     <div className="min-h-screen bg-stone-100 font-sans pb-28">
-      <AdminHeader title="E-Waybill & GST Invoice Generator" />
-
       <div className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
 
         {/* Form Title Banner */}
@@ -760,7 +757,7 @@ export default function InvoiceFormPage() {
           )}
 
           {/* ── BOTTOM ACTION BAR ────────────────────────────────────────────── */}
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-stone-950/90 backdrop-blur-xl p-3 px-6 rounded-2xl shadow-2xl border border-stone-800 z-40 flex items-center gap-4">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-stone-950/90 backdrop-blur-xl p-3 px-6 rounded-2xl shadow-2xl border border-stone-800 z-40 flex items-center gap-4 md:left-[calc(50%+8rem)]">
             <button
               type="button"
               onClick={() => {

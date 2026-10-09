@@ -1,239 +1,106 @@
-
 import express from 'express';
 import cors from 'cors';
-import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import mongoose from 'mongoose';
-
-// Route modules
+import multer from 'multer';
 import invoicesRouter from './src-server/routes/invoices.js';
 import adminRouter from './src-server/routes/admin.js';
+import crmRouter from './src-server/routes/crm.js';
+import inventoryRouter from './src-server/routes/inventory.js';
+import { validateEnvironment, getAllowedOrigins } from './src-server/config/env.js';
+import { connectDB, databaseStatus } from './src-server/config/database.js';
+import { submitCallbackLead, submitEnquiryLead } from './src-server/controllers/publicLeadController.js';
 
 dotenv.config();
+validateEnvironment();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ── MongoDB connection (cached for Vercel serverless cold starts) ──────────────
-let mongoConnected = false;
-async function connectDB() {
-    if (mongoConnected || mongoose.connection.readyState === 1) return;
-    if (!process.env.MONGODB_URI) {
-        console.warn('MONGODB_URI not set — invoice features will not work.');
-        return;
-    }
-    try {
-        await mongoose.connect(process.env.MONGODB_URI, {
-            bufferCommands: false,
-            serverSelectionTimeoutMS: 5000,
-        });
-        mongoConnected = true;
-        console.log('MongoDB connected.');
-    } catch (err) {
-        console.error('MongoDB connection error:', err.message);
-    }
-}
-connectDB();
-
-// Security Middleware
 app.use(helmet());
 
-// CORS Configuration - Restrict to ALLOWED_ORIGIN in prod, allow all in dev
-const allowedOrigin = process.env.ALLOWED_ORIGIN;
-app.use(cors({
-    origin: allowedOrigin ? allowedOrigin.split(',') : '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
+const allowedOrigins = getAllowedOrigins();
+app.use((req, res, next) => {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const protocol = typeof forwardedProto === 'string' ? forwardedProto.split(',')[0].trim() : req.protocol;
+  const sameOrigin = `${protocol}://${req.get('host')}`;
 
-app.use(express.json());
-
-// Rate Limiting: Limit each IP to 5 requests per 15 minutes
-const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5,
-    message: { error: 'Too many requests from this IP. Please try again after 15 minutes.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-// Nodemailer Transporter
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+  return cors({
+    origin(origin, callback) {
+      if (!origin || origin === sameOrigin || allowedOrigins.has(origin)) return callback(null, true);
+      return callback(new Error('Origin not allowed by CORS.'));
     },
-    tls: {
-        rejectUnauthorized: false
-    }
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })(req, res, next);
 });
 
-// Validation Helper
-const validatePhone = (phone) => {
-    // Basic regex for 10-digit number (supports optional +91 or other formats slightly)
-    const phoneRegex = /^(\+?\d{1,4}[- ]?)?\d{10}$/;
-    return phoneRegex.test(phone.replace(/\s+/g, '').replace(/-/g, ''));
+app.use(express.json({ limit: '100kb' }));
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many login attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+});
+
+const noStore = (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
 };
 
-// Routes
-import multer from 'multer';
+// New canonical CRM submission route plus temporary compatibility adapters.
+app.post('/api/leads', noStore, apiLimiter, upload.single('file'), submitEnquiryLead);
+app.post('/api/send-enquiry', noStore, apiLimiter, upload.single('file'), submitEnquiryLead);
+app.post('/api/request-callback', noStore, apiLimiter, submitCallbackLead);
 
-// Configure Multer (Memory Storage with 5MB file size limit)
-const storage = multer.memoryStorage();
-const upload = multer({ 
-    storage: storage,
-    limits: {
-        fileSize: 5 * 1024 * 1024 // 5 MB limit
-    }
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', database: databaseStatus() });
 });
 
-// Routes
-app.post('/api/request-callback', apiLimiter, async (req, res) => {
-    try {
-        const { productName, customerName, phoneNumber, preferredTime, email, sourcePage } = req.body;
+app.use('/api/invoices', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+}, invoicesRouter);
+app.use('/api/admin/login', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+}, adminLoginLimiter);
+app.use('/api/admin', adminRouter);
+app.use('/api/admin', crmRouter);
+app.use('/api/admin', inventoryRouter);
 
-        // Validation - Support both original Callback Request and new Lead Capture flows
-        // Case 1: Standard Callback (Requires Product, Name, Phone, Time)
-        // Case 2: Lead Capture (Requires Phone) - Email is optional but requested
-
-        const isLeadCapture = (!productName && !preferredTime) || productName === 'Lead Capture Popup';
-
-        if (isLeadCapture) {
-            if (!phoneNumber) {
-                return res.status(400).json({ error: 'Phone number is required' });
-            }
-        } else {
-            if (!productName || !customerName || !phoneNumber || !preferredTime) {
-                return res.status(400).json({ error: 'All fields are required' });
-            }
-        }
-
-        if (phoneNumber && !validatePhone(phoneNumber)) {
-            return res.status(400).json({ error: 'Invalid phone number format' });
-        }
-
-        // Email Content
-        const subject = isLeadCapture
-            ? `New Lead Captured: ${email || phoneNumber}`
-            : `New Callback Request: ${productName} - ${customerName}`;
-
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: process.env.EMAIL_USER,
-            subject: subject,
-            html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                    <h2 style="color: #000; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;">
-                        ${isLeadCapture ? 'New Lead Captured' : 'New Callback Request'}
-                    </h2>
-                    
-                    ${productName ? `<p><strong>Product:</strong> ${productName}</p>` : ''}
-                    ${customerName ? `<p><strong>Customer Name:</strong> ${customerName}</p>` : ''}
-                    
-                    <p><strong>Phone Number:</strong> <a href="tel:${phoneNumber}">${phoneNumber}</a></p>
-                    ${email ? `<p><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>` : ''}
-                    
-                    ${preferredTime ? `<p><strong>Preferred Time:</strong> ${new Date(preferredTime).toLocaleString()}</p>` : ''}
-                    
-                    ${sourcePage ? `<p><strong>Source Page:</strong> <a href="${sourcePage}">${sourcePage}</a></p>` : ''}
-
-                    <br/>
-                    <p style="font-size: 12px; color: #888;">This email was sent from the Swamy Slabs website.</p>
-                </div>
-            `
-        };
-
-        // Send Email
-        await transporter.sendMail(mailOptions);
-        res.status(200).json({ message: 'Request received successfully' });
-
-    } catch (error) {
-        console.error('Callback request error:', error);
-        res.status(500).json({ error: 'Failed to process request' });
-    }
+app.use((err, req, res, _next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'File size too large. Maximum limit is 5MB.' });
+    return res.status(400).json({ error: 'Invalid upload.' });
+  }
+  if (err?.message === 'Origin not allowed by CORS.') return res.status(403).json({ error: 'Origin not allowed.' });
+  console.error('Unhandled Express error:', err?.message || 'Unknown error');
+  return res.status(500).json({ error: 'An internal server error occurred.' });
 });
 
-// Enquiry Route with File Upload and Mime Type Validation
-app.post('/api/send-enquiry', apiLimiter, upload.single('file'), async (req, res) => {
-    try {
-        const { productName, materialType, thickness, quantity, message } = req.body;
-        const file = req.file;
-
-        // Validate file type if file is uploaded
-        if (file) {
-            const allowedMimeTypes = [
-                'image/jpeg',
-                'image/png',
-                'image/svg+xml',
-                'image/webp',
-                'application/pdf'
-            ];
-            if (!allowedMimeTypes.includes(file.mimetype)) {
-                return res.status(400).json({ error: 'Invalid file type. Only JPG, PNG, WEBP, SVG, and PDF files are allowed.' });
-            }
-        }
-
-        // Email Content
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: process.env.EMAIL_USER,
-            subject: `New Enquiry: ${productName} - ${materialType}`,
-            html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                    <h2 style="color: #000; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;">New Detailed Enquiry</h2>
-                    <p><strong>Product:</strong> ${productName}</p>
-                    <p><strong>Material:</strong> ${materialType}</p>
-                    <p><strong>Thickness:</strong> ${thickness}</p>
-                    <p><strong>Quantity:</strong> ${quantity}</p>
-                    <p><strong>Additional Notes:</strong></p>
-                    <p style="background: #f9f9f9; padding: 10px; border-radius: 5px;">${message || 'None'}</p>
-                    ${file ? '<p><strong> Attachment included.</strong></p>' : ''}
-                    <br/>
-                    <p style="font-size: 12px; color: #888;">This email was sent from the Swamy Slabs website.</p>
-                </div>
-            `,
-            attachments: file ? [
-                {
-                    filename: file.originalname,
-                    content: file.buffer
-                }
-            ] : []
-        };
-
-        await transporter.sendMail(mailOptions);
-        res.status(200).json({ message: 'Enquiry sent successfully' });
-
-    } catch (error) {
-        console.error('Enquiry request error:', error);
-        res.status(500).json({ error: 'Failed to process enquiry' });
-    }
-});
-
-// ── Invoice & Admin routes ─────────────────────────────────────────────────────
-app.use('/api/invoices', invoicesRouter);
-app.use('/api/admin',    adminRouter);
-
-// Global Error Handling Middleware (Handles multer file size limit and other errors cleanly)
-app.use((err, req, res, next) => {
-    if (err instanceof multer.MulterError) {
-        if (err.code === 'LIMIT_FILE_SIZE') {
-            return res.status(400).json({ error: 'File size too large. Maximum limit is 5MB.' });
-        }
-        return res.status(400).json({ error: err.message });
-    }
-    console.error('Unhandled Express Error:', err);
-    res.status(500).json({ error: 'An internal server error occurred.' });
-});
-
-// Start Server if not on Vercel
 if (!process.env.VERCEL) {
-    app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
+  connectDB()
+    .then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
+    .catch((error) => {
+      console.error('Server startup failed:', error.message);
+      process.exitCode = 1;
     });
 }
 

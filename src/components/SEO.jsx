@@ -1,13 +1,18 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 
-const SITE_URL = 'https://swamyslabs.vercel.app';
+export const SITE_URL = 'https://swamyslabs.vercel.app';
 const DEFAULT_OG_IMAGE = `${SITE_URL}/ssi_logo.png`;
 
-const SEO = ({ title, description, keywords, canonicalUrl, ogImage, noIndex = false }) => {
+export function toAbsoluteSiteUrl(value = '') {
+    if (/^https?:\/\//i.test(value)) return value;
+    return `${SITE_URL}${value.startsWith('/') ? value : `/${value}`}`;
+}
+
+const SEO = ({ title, description, keywords, canonicalUrl, canonicalPath, ogImage, noIndex = false, type = 'website' }) => {
     const fullTitle = title?.includes('Swamy Slabs') ? title : `${title} | Swamy Slabs`;
-    const canonical = canonicalUrl || SITE_URL;
-    const imageUrl = ogImage || DEFAULT_OG_IMAGE;
+    const canonical = canonicalUrl || (canonicalPath ? toAbsoluteSiteUrl(canonicalPath) : SITE_URL);
+    const imageUrl = ogImage ? toAbsoluteSiteUrl(ogImage) : DEFAULT_OG_IMAGE;
 
     return (
         <Helmet>
@@ -18,7 +23,7 @@ const SEO = ({ title, description, keywords, canonicalUrl, ogImage, noIndex = fa
             <link rel="canonical" href={canonical} />
 
             {/* Open Graph / Facebook */}
-            <meta property="og:type" content="website" />
+            <meta property="og:type" content={type} />
             <meta property="og:site_name" content="Swamy Slabs" />
             <meta property="og:url" content={canonical} />
             <meta property="og:title" content={fullTitle} />
