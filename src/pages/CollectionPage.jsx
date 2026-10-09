@@ -1,23 +1,9 @@
-import { useState, useEffect } from 'react';
 import ProductListing from '../components/ProductListing';
-import { motion } from 'framer-motion';
 import MoltenStoneBackground from '../components/MoltenStoneBackground';
 import SEO from '../components/SEO';
+import { PREMIUM_STONES } from '../data/stones';
 
 const CollectionPage = () => {
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        // Simulating fetch or using static data directly for the new "invoice" view
-        // The ProductListing component will automatically fallback to PREMIUM_STONES 
-        // when the passed 'products' array is empty.
-        const timer = setTimeout(() => {
-            setLoading(false);
-        }, 800);
-        return () => clearTimeout(timer);
-    }, []);
-
     return (
         <div className="min-h-screen bg-stone-900">
             <SEO
@@ -52,13 +38,7 @@ const CollectionPage = () => {
                     <div className="container mx-auto px-4">
                         {/* Decorative top border/curve */}
                         <div className="relative bg-stone-50 rounded-t-[2.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] pt-12 pb-8 min-h-screen">
-                            {loading ? (
-                                <div className="flex justify-center items-center h-64">
-                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-stone-900"></div>
-                                </div>
-                            ) : (
-                                <ProductListing products={products} showViewMore={false} enableSorting={true} showHeader={false} />
-                            )}
+                            <ProductListing products={PREMIUM_STONES} showViewMore={false} enableSorting={true} showHeader={false} />
                         </div>
                     </div>
                 </div>

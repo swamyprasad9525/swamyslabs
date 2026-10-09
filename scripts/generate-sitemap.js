@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { PREMIUM_STONES } from '../src/data/stones.js';
+import { getAllStones } from '../src/lib/catalog.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,14 +12,15 @@ console.log('Generating sitemap...');
 
 const staticPages = [
     { route: '/', changefreq: 'daily', priority: '1.0' },
-    { route: '/collection', changefreq: 'weekly', priority: '0.9' },
+    { route: '/stones', changefreq: 'weekly', priority: '0.9' },
+    { route: '/project-planner', changefreq: 'monthly', priority: '0.8' },
     { route: '/about', changefreq: 'monthly', priority: '0.8' },
     { route: '/contact', changefreq: 'monthly', priority: '0.8' }
 ];
 
-const productPages = PREMIUM_STONES.map(stone => {
+const productPages = getAllStones().map(stone => {
     return {
-        route: `/collection/${stone.id}`,
+        route: `/stones/${stone.slug}`,
         changefreq: 'monthly',
         priority: '0.7',
         stone: stone

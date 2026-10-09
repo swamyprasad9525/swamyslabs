@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { getStoneById, getStoneBySlug } from '../lib/catalog';
 
 const CartContext = createContext({
     cartItems: [],
@@ -15,12 +16,31 @@ const CartContext = createContext({
 
 export const useCart = () => useContext(CartContext);
 
+function normalizeSelectionItem(item) {
+    const stone = getStoneById(item?.stoneId || item?.id) || getStoneBySlug(item?.slug);
+    const id = String(item?.stoneId || item?.id || stone?.id || '');
+
+    return {
+        ...item,
+        id,
+        stoneId: id,
+        slug: item?.slug || stone?.slug || null,
+        name: item?.name || stone?.name || 'Selected stone',
+        image: item?.image || item?.images?.[0] || stone?.images?.[0] || null,
+        materialFamily: item?.materialFamily || item?.category || stone?.materialFamily || null,
+        finish: item?.finish || item?.selectedFinish || stone?.finishes?.[0] || null,
+        thickness: item?.thickness || stone?.thicknesses?.[0] || null,
+        quantity: Math.max(1, Number(item?.quantity) || 1),
+    };
+}
+
 export const CartProvider = ({ children }) => {
     // Load initial cart from local storage
     const [cartItems, setCartItems] = useState(() => {
         try {
             const localData = localStorage.getItem('cart');
-            return localData ? JSON.parse(localData) : [];
+            const parsed = localData ? JSON.parse(localData) : [];
+            return Array.isArray(parsed) ? parsed.map(normalizeSelectionItem) : [];
         } catch (e) {
             console.error("Failed to load cart from local storage", e);
             return [];
@@ -35,16 +55,18 @@ export const CartProvider = ({ children }) => {
     }, [cartItems]);
 
     const addToCart = (product) => {
+        const normalizedProduct = normalizeSelectionItem(product);
+        const quantityToAdd = normalizedProduct.quantity;
         setCartItems(prevItems => {
-            const existingItem = prevItems.find(item => item.id === product.id);
+            const existingItem = prevItems.find(item => item.id === normalizedProduct.id);
             if (existingItem) {
                 return prevItems.map(item =>
-                    item.id === product.id
-                        ? { ...item, quantity: item.quantity + 1 }
+                    item.id === normalizedProduct.id
+                        ? { ...item, quantity: item.quantity + quantityToAdd }
                         : item
                 );
             }
-            return [...prevItems, { ...product, quantity: 1 }];
+            return [...prevItems, normalizedProduct];
         });
         setIsCartOpen(true); // Open cart when item is added
     };

@@ -1,6 +1,25 @@
+const createCatalogStone = (stone) => ({
+    ...stone,
+    materialFamily: stone.materialType,
+    category: null,
+    color: null,
+    shortDescription: stone.description,
+    finishes: stone.finish ? [stone.finish] : [],
+    thicknesses: stone.thickness ? [stone.thickness] : [],
+    applications: [...(stone.application || [])],
+    features: [],
+    technicalSpecifications: {},
+    price: stone.pricePerSqFt ?? null,
+    priceUnit: stone.pricePerSqFt == null ? null : 'sq ft',
+    minimumOrder: null,
+    origin: null,
+    seo: {},
+});
+
 export const PREMIUM_STONES = [
     {
         id: '1',
+        slug: 'tandur-yellow-limestone-cobble-premium',
         name: 'Tandur Yellow Limestone Cobble (Premium)',
         materialType: 'Limestone',
         finish: 'Natural + Tumbled',
@@ -14,6 +33,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '2',
+        slug: 'tandur-yellow-pool-coping',
         name: 'Tandur Yellow Pool Coping',
         materialType: 'Limestone',
         finish: 'Natural + Tumbled',
@@ -27,6 +47,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '3',
+        slug: 'tandur-yellow-limestone-cobble-heavy',
         name: 'Tandur Yellow Limestone Cobble (Heavy)',
         materialType: 'Limestone',
         finish: 'Natural + Tumbled',
@@ -40,6 +61,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '4',
+        slug: 'kadappa-black-limestone-french-opus',
         name: 'Kadappa Black Limestone (French Opus)',
         materialType: 'Limestone',
         finish: 'Half Honed + Tumbled + Brushed',
@@ -53,6 +75,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '5',
+        slug: 'tandur-yellow-limestone-french-opus',
         name: 'Tandur Yellow Limestone (French Opus)',
         materialType: 'Limestone',
         finish: 'Half Honed + Tumbled + Brushed',
@@ -66,6 +89,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '6',
+        slug: 't-grey-sandstone',
         name: 'T. Grey Sandstone',
         materialType: 'Sandstone',
         finish: 'Bit Honed (H/c)',
@@ -79,6 +103,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '7',
+        slug: 't-yellow-sandstone',
         name: 'T. Yellow Sandstone',
         materialType: 'Sandstone',
         finish: 'Bit Honed (H/c)',
@@ -92,6 +117,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '8',
+        slug: 'napa-slabs-tumbled',
         name: 'Napa Slabs (Tumbled)',
         materialType: 'Natural Stone',
         finish: 'Tumbled',
@@ -105,6 +131,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '9',
+        slug: 'napa-slabs-machine-cut',
         name: 'Napa Slabs (Machine Cut)',
         materialType: 'Natural Stone',
         finish: 'Machine Cut',
@@ -118,6 +145,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '10',
+        slug: 'kadappa-stone-slab',
         name: 'Kadappa Stone Slab',
         materialType: 'Limestone',
         finish: 'Natural',
@@ -131,6 +159,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '11',
+        slug: 'grey-polished-black-stone',
         name: 'Grey Polished Black Stone',
         materialType: 'Limestone',
         finish: 'Mirror Polished',
@@ -144,6 +173,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '12',
+        slug: 'ash-grey-machine-cut',
         name: 'Ash Grey Machine Cut',
         materialType: 'Natural Stone',
         finish: 'Machine Cut',
@@ -157,6 +187,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '13',
+        slug: 'beige-shabad-stones',
         name: 'Beige Shabad Stones',
         materialType: 'Limestone',
         finish: 'Natural',
@@ -170,6 +201,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '14',
+        slug: 'polished-betamcherla-white',
         name: 'Polished Betamcherla White',
         materialType: 'Natural Stone',
         finish: 'Polished',
@@ -183,6 +215,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '15',
+        slug: 'tandur-yellow-brushed-finish',
         name: 'Tandur Yellow (Brushed Finish)',
         materialType: 'Limestone',
         finish: 'Brushed',
@@ -196,6 +229,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '16',
+        slug: 'kurnool-grey-leather-finish',
         name: 'Kurnool Grey Leather Finish',
         materialType: 'Limestone',
         finish: 'Leathered / Antique',
@@ -209,6 +243,7 @@ export const PREMIUM_STONES = [
     },
     {
         id: '17',
+        slug: 'tn-yellow-architectural-slab',
         name: 'T.N Yellow Architectural Slab',
         materialType: 'Limestone',
         finish: 'Half Honed (H/H)',
@@ -220,4 +255,6 @@ export const PREMIUM_STONES = [
         dimensions: '120 x 60 cm',
         featured: false
     }
-];
+].map(createCatalogStone);
+
+export const STONES = PREMIUM_STONES;

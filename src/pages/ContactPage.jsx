@@ -61,7 +61,7 @@ const ContactPage = () => {
                                 transition={{ duration: 0.8 }}
                             >
                                 <h3 className="text-3xl md:text-4xl font-serif text-white mb-2">Send us a Message</h3>
-                                <p className="text-stone-500 mb-10">We usually respond within 24 hours.</p>
+                                <p className="text-stone-500 mb-10">Share your project requirement and keep the reference shown after submission.</p>
                                 <ChiseledForm />
                             </motion.div>
                         </div>

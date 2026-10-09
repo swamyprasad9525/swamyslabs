@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { useToast } from '../common/Toast';
+import { apiRequest, createSubmissionId } from '../../lib/api';
 
-const ChiseledInput = ({ label, type = "text", placeholder, id, textarea = false, value, onChange }) => {
+const ChiseledInput = ({ label, type = "text", placeholder, id, textarea = false, value, onChange, required = false, maxLength }) => {
     const [isFocused, setIsFocused] = useState(false);
 
     return (
@@ -21,6 +22,8 @@ const ChiseledInput = ({ label, type = "text", placeholder, id, textarea = false
                         onChange={onChange}
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setIsFocused(false)}
+                        required={required}
+                        maxLength={maxLength}
                         className="w-full bg-[#1c1917] text-stone-200 placeholder-stone-700 text-sm font-medium p-4 rounded-sm outline-none border-none shadow-[inset_2px_2px_5px_rgba(0,0,0,0.8),inset_-1px_-1px_2px_rgba(255,255,255,0.05)] transition-all duration-300 resize-none"
                     />
                 ) : (
@@ -32,6 +35,8 @@ const ChiseledInput = ({ label, type = "text", placeholder, id, textarea = false
                         onChange={onChange}
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setIsFocused(false)}
+                        required={required}
+                        maxLength={maxLength}
                         className="w-full bg-[#1c1917] text-stone-200 placeholder-stone-700 text-sm font-medium p-4 rounded-sm outline-none border-none shadow-[inset_2px_2px_5px_rgba(0,0,0,0.8),inset_-1px_-1px_2px_rgba(255,255,255,0.05)] transition-all duration-300"
                     />
                 )}
@@ -50,10 +55,10 @@ const ChiseledInput = ({ label, type = "text", placeholder, id, textarea = false
 
 
 
-const SubmitButton = ({ onClick, status, disabled }) => {
+const SubmitButton = ({ status, disabled }) => {
     return (
         <motion.button
-            onClick={onClick}
+            type="submit"
             disabled={disabled}
             className="w-full relative overflow-hidden group bg-amber-700 hover:bg-amber-600 text-white font-bold uppercase tracking-[0.2em] py-5 px-8 shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             whileHover={{ scale: disabled ? 1 : 1.02 }}
@@ -88,69 +93,52 @@ const ChiseledForm = () => {
         details: ''
     });
     const [status, setStatus] = useState('idle'); // idle, sending, sent, error
+    const [reference, setReference] = useState('');
+    const submissionIdRef = useRef(createSubmissionId());
 
     const handleInputChange = (e) => {
         const { id, value } = e.target;
         setFormData(prev => ({ ...prev, [id]: value }));
     };
 
-    const handleSubmit = async () => {
-        if (!formData.name || !formData.phoneNumber) {
-            showToast('Name and Phone Number are required.', 'error');
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+        if (!formData.name || !formData.phoneNumber || !formData.email) {
+            showToast('Name, email, and phone number are required.', 'error');
             return;
         }
 
         setStatus('sending');
 
         try {
-            const apiBase = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000' : '');
-            const response = await fetch(`${apiBase}/api/request-callback`, {
+            const result = await apiRequest('/api/request-callback', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({
+                    submissionId: submissionIdRef.current,
+                    source: 'CONTACT',
                     customerName: formData.name,
                     phoneNumber: formData.phoneNumber,
                     email: formData.email,
                     productName: "General Inquiry - Contact Form", // Default value to satisfy backend "productName" requirement
                     preferredTime: new Date().toISOString(),
-                    // We append details to sourcePage or handle it if backend supported it, 
-                    // otherwise just sending basic info for now as per backend schema.
-                    // Ideally backend should accept 'message' field. 
-                    // But for now, let's stick to valid payload.
-                    sourcePage: `Contact Page - Message: ${formData.details}`
+                    sourcePage: `${window.location.pathname}${window.location.search}`,
+                    message: formData.details
                 }),
             });
-
-            if (response.ok) {
-                setStatus('sent');
-                showToast('Inquiry sent successfully! We will contact you soon.', 'success');
-                // Reset form after delay
-                setTimeout(() => {
-                    setStatus('idle');
-                    setFormData({
-                        name: '',
-                        phoneNumber: '',
-                        email: '',
-                        details: ''
-                    });
-                }, 3000);
-            } else {
-                setStatus('error');
-                showToast('Failed to send message. Please try again.', 'error');
-                setStatus('idle');
-            }
+            setReference(result.reference || '');
+            setStatus('sent');
+            showToast('Inquiry saved successfully.', 'success');
+            setFormData({ name: '', phoneNumber: '', email: '', details: '' });
+            submissionIdRef.current = createSubmissionId();
         } catch (error) {
             console.error('Error sending message:', error);
             setStatus('error');
-            showToast('Something went wrong. Please check your connection.', 'error');
-            setStatus('idle');
+            showToast(error instanceof Error ? error.message : 'Something went wrong. Please check your connection.', 'error');
         }
     };
 
     return (
-        <div className="bg-[#12100e] p-8 md:p-12 border border-stone-800 shadow-2xl relative overflow-hidden backdrop-blur-sm bg-opacity-90">
+        <form onSubmit={handleSubmit} className="bg-[#12100e] p-8 md:p-12 border border-stone-800 shadow-2xl relative overflow-hidden backdrop-blur-sm bg-opacity-90">
             {/* Background Texture */}
             <div className="absolute inset-0 pointer-events-none opacity-20"
                 style={{ backgroundImage: `radial-gradient(circle at 50% 0%, #292524 0%, transparent 70%)` }}>
@@ -162,6 +150,8 @@ const ChiseledForm = () => {
                 placeholder="e.g. Swamy Prasad"
                 value={formData.name}
                 onChange={handleInputChange}
+                required
+                maxLength={120}
             />
 
             <ChiseledInput
@@ -171,6 +161,8 @@ const ChiseledForm = () => {
                 placeholder="Enter Phone Number"
                 value={formData.phoneNumber}
                 onChange={handleInputChange}
+                required
+                maxLength={30}
             />
 
             <ChiseledInput
@@ -180,6 +172,8 @@ const ChiseledForm = () => {
                 placeholder="name@company.com"
                 value={formData.email}
                 onChange={handleInputChange}
+                required
+                maxLength={254}
             />
 
 
@@ -191,10 +185,13 @@ const ChiseledForm = () => {
                 placeholder="Tell us about the scale and vision of your project..."
                 value={formData.details}
                 onChange={handleInputChange}
+                maxLength={3000}
             />
 
-            <SubmitButton onClick={handleSubmit} status={status} disabled={status === 'sending' || status === 'sent'} />
-        </div>
+            {reference && <p className="mb-5 border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-center text-sm text-emerald-200" role="status">Request saved. Reference: <strong>{reference}</strong></p>}
+            {status === 'error' && <p className="mb-5 text-center text-sm text-red-300" role="alert">The request could not be saved. Please try again.</p>}
+            <SubmitButton status={status} disabled={status === 'sending' || status === 'sent'} />
+        </form>
     );
 };
 

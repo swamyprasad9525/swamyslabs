@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { X, Clock, Phone, User, Check } from 'lucide-react';
+import { apiRequest, createSubmissionId } from '../lib/api';
 
 const CallbackForm = ({ isOpen, onClose, product }) => {
     const [formData, setFormData] = useState({
@@ -11,6 +12,8 @@ const CallbackForm = ({ isOpen, onClose, product }) => {
     });
     const [status, setStatus] = useState('idle'); // idle, submitting, success, error
     const [errorMessage, setErrorMessage] = useState('');
+    const [reference, setReference] = useState('');
+    const submissionIdRef = useRef(createSubmissionId());
 
     useEffect(() => {
         if (!isOpen) {
@@ -21,6 +24,8 @@ const CallbackForm = ({ isOpen, onClose, product }) => {
             });
             setStatus('idle');
             setErrorMessage('');
+            setReference('');
+            submissionIdRef.current = createSubmissionId();
         }
     }, [isOpen]);
 
@@ -29,28 +34,21 @@ const CallbackForm = ({ isOpen, onClose, product }) => {
         setStatus('submitting');
 
         try {
-            const apiBase = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000' : '');
-            const response = await fetch(`${apiBase}/api/request-callback`, {
+            const data = await apiRequest('/api/request-callback', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    submissionId: submissionIdRef.current,
+                    source: 'CALLBACK',
                     productName: product?.name,
                     customerName: formData.name,
                     phoneNumber: formData.phone,
-                    preferredTime: formData.scheduledTime
+                    preferredTime: formData.scheduledTime,
+                    sourcePage: `${window.location.pathname}${window.location.search}`,
                 })
             });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                setStatus('success');
-                setTimeout(() => {
-                    onClose();
-                }, 3000);
-            } else {
-                throw new Error(data.error || 'Failed to send request');
-            }
+            setReference(data.reference || '');
+            setStatus('success');
+            submissionIdRef.current = createSubmissionId();
         } catch (error) {
             console.error(error);
             setStatus('error');
@@ -80,7 +78,9 @@ const CallbackForm = ({ isOpen, onClose, product }) => {
                             <Check className="w-8 h-8 text-green-600" />
                         </div>
                         <h4 className="text-xl font-bold text-gray-900 mb-2">Request Sent!</h4>
-                        <p className="text-gray-500">We will call you shortly at your preferred time.</p>
+                        <p className="text-gray-500">Your callback request has been saved.</p>
+                        {reference && <p className="mt-4 border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-900">Reference: {reference}</p>}
+                        <button type="button" onClick={onClose} className="mt-6 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white">Close</button>
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="p-6 space-y-5">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAdmin } from '../../context/AdminContext';
 
 /**
@@ -15,5 +15,5 @@ export default function AdminGuard({ children }) {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;
   }
 
-  return children;
+  return children || <Outlet />;
 }

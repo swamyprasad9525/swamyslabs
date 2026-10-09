@@ -118,9 +118,8 @@ const LuxuryStoneCard = ({ product, index, navigate, addToCart }) => {
 };
 
 // Main Component
-const ProductListing = ({ products = [], showViewMore = true, enableSorting = false, showHeader = true }) => {
-    // Force use of PREMIUM_STONES if standard products are passed (for demo purposes as per prompt)
-    const displayData = products.length > 5 ? products : PREMIUM_STONES;
+const ProductListing = ({ products = PREMIUM_STONES, showViewMore = true, enableSorting = false, showHeader = true }) => {
+    const displayData = products;
 
     const [activeCategory, setActiveCategory] = useState('All');
     const navigate = useNavigate();

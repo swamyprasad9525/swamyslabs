@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAdmin } from '../../context/AdminContext';
-import AdminHeader from '../../components/admin/AdminHeader';
 import { 
   FileText, Plus, Search, Calendar, RefreshCw, Eye, Download, 
   IndianRupee, TrendingUp, Layers, CheckCircle2, AlertCircle
@@ -96,8 +95,6 @@ export default function InvoiceListPage() {
 
   return (
     <div className="min-h-screen bg-stone-100 font-sans selection:bg-amber-400 selection:text-stone-950 pb-16">
-      <AdminHeader title="GST Invoices Directory" />
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 space-y-6">
         
         {/* Title Header */}

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { verifyAdmin } from '../middleware/auth.js';
+import { requireDatabase } from '../config/database.js';
 import {
   createInvoice,
   listInvoices,
@@ -9,10 +10,11 @@ import {
 
 const router = Router();
 
-// All invoice routes require admin auth
-router.get('/',          verifyAdmin, listInvoices);
-router.post('/',         verifyAdmin, createInvoice);
-router.get('/:id/excel', verifyAdmin, exportInvoiceExcel);
-router.get('/:id',       verifyAdmin, getInvoice);
+// Authenticate before attempting a database connection.
+router.use(verifyAdmin, requireDatabase);
+router.get('/',          listInvoices);
+router.post('/',         createInvoice);
+router.get('/:id/excel', exportInvoiceExcel);
+router.get('/:id',       getInvoice);
 
 export default router;
