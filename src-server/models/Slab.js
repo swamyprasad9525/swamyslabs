@@ -38,14 +38,22 @@ const slabSchema = new Schema({
     index: true,
   },
   stoneRef: { type: stoneRefSchema, required: true, immutable: true },
+  finish: { type: String, trim: true, maxlength: 120 },
   dimensions: { type: dimensionsSchema, required: true },
-  grossAreaSqFt: { type: Number, required: true, min: 0.0001, immutable: true },
+  // Current measured area. Processing input snapshots preserve its prior value.
+  grossAreaSqFt: { type: Number, required: true, min: 0.0001 },
   usableAreaSqFt: { type: Number, min: 0 },
   status: {
     type: String,
     enum: INVENTORY_STATUSES,
     required: true,
     default: 'AVAILABLE',
+    index: true,
+  },
+  activeProcessingJob: {
+    type: Schema.Types.ObjectId,
+    ref: 'ProcessingJob',
+    default: null,
     index: true,
   },
   location: { type: locationSchema, required: true },

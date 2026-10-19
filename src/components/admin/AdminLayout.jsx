@@ -4,6 +4,7 @@ import {
   ChevronRight,
   ExternalLink,
   FileText,
+  Factory,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { label: 'CRM', path: '/admin/crm', icon: BriefcaseBusiness },
   { label: 'Customers', path: '/admin/customers', icon: Users },
   { label: 'Inventory', path: '/admin/inventory', icon: PackageSearch },
+  { label: 'Processing', path: '/admin/processing', icon: Factory },
   { label: 'Invoices', path: '/admin/invoices', icon: FileText },
 ];
 
@@ -29,6 +31,7 @@ const SECTION_LABELS = [
   { prefix: '/admin/crm', label: 'CRM' },
   { prefix: '/admin/customers', label: 'Customers' },
   { prefix: '/admin/inventory', label: 'Inventory' },
+  { prefix: '/admin/processing', label: 'Processing' },
   { prefix: '/admin/invoices', label: 'Invoices' },
 ];
 
@@ -39,11 +42,14 @@ function getAdminBreadcrumbs(pathname) {
 
   let detailLabel = 'Details';
   if (pathname === '/admin/inventory/batches/new') detailLabel = 'New batch';
+  else if (pathname === '/admin/processing/jobs/new') detailLabel = 'New processing job';
+  else if (section.label === 'Processing' && pathname.endsWith('/edit')) detailLabel = 'Edit processing job';
   else if (pathname.endsWith('/edit')) detailLabel = 'Edit';
   else if (pathname === '/admin/invoices/new') detailLabel = 'New invoice';
   else if (section.label === 'CRM') detailLabel = 'Lead detail';
   else if (section.label === 'Customers') detailLabel = 'Customer detail';
   else if (section.label === 'Inventory') detailLabel = 'Batch detail';
+  else if (section.label === 'Processing') detailLabel = 'Processing job';
   else if (section.label === 'Invoices') detailLabel = 'Invoice detail';
 
   return [

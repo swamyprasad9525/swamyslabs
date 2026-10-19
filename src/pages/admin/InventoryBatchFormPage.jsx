@@ -301,6 +301,19 @@ export default function InventoryBatchFormPage() {
     );
   }
 
+  if (editing && (batch.status === 'IN_PROCESSING' || batch.activeProcessingJob)) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4">
+        <Helmet><title>{batch.batchNumber} In Processing | Swamy Slabs Admin</title><meta name="robots" content="noindex, nofollow" /></Helmet>
+        <Link to={`/admin/inventory/batches/${id}`} className="inline-flex items-center gap-2 text-sm font-bold text-stone-600"><ArrowLeft className="h-4 w-4" /> Batch detail</Link>
+        <div className="rounded-xl border border-violet-200 bg-white p-6 shadow-sm">
+          <h1 className="text-xl font-black text-stone-950">Processing controls this inventory</h1>
+          <p className="mt-2 text-sm leading-6 text-stone-600">{batch.batchNumber} cannot be edited while its physical material is assigned to an active processing job. Complete the production and QC workflow before changing inventory metadata.</p>
+        </div>
+      </div>
+    );
+  }
+
   const hasPositiveInventory = Number(batchQuantityOnHand(batch) || 0) > 0
     || Number(batchAreaOnHand(batch) || 0) > 0;
   const permittedStatusOptions = INVENTORY_STATUSES.filter(({ value }) => (

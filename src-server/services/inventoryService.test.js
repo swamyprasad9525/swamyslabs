@@ -101,10 +101,14 @@ function createModels({ batch, movement, slab } = {}) {
 }
 
 describe('inventory constants and reference helpers', () => {
-  it('publishes only Phase 5 inventory modes, statuses and movement types', () => {
+  it('publishes inventory and processing-aware statuses and movement types', () => {
     expect(INVENTORY_MODES).toEqual(['BATCH', 'INDIVIDUAL_SLAB']);
-    expect(INVENTORY_STATUSES).toEqual(['DRAFT', 'AVAILABLE', 'HOLD', 'DEPLETED', 'ARCHIVED']);
-    expect(MOVEMENT_TYPES).toEqual(['RECEIPT', 'ADJUSTMENT_IN', 'ADJUSTMENT_OUT', 'TRANSFER']);
+    expect(INVENTORY_STATUSES).toEqual([
+      'DRAFT', 'AVAILABLE', 'HOLD', 'IN_PROCESSING', 'DEPLETED', 'ARCHIVED',
+    ]);
+    expect(MOVEMENT_TYPES).toEqual([
+      'RECEIPT', 'ADJUSTMENT_IN', 'ADJUSTMENT_OUT', 'TRANSFER', 'PROCESSING_ISSUE', 'PROCESSING_RETURN',
+    ]);
     expect(ADJUSTMENT_DIRECTIONS).toEqual(['IN', 'OUT']);
   });
 
@@ -600,14 +604,16 @@ describe('integrity, reporting and query safety', () => {
         { _id: 'USD', amount: 999.9, batches: 1 },
       ],
     }]);
-    models.SlabModel.countDocuments.mockResolvedValue(7);
+    models.SlabModel.countDocuments.mockResolvedValueOnce(7).mockResolvedValueOnce(2);
 
     await expect(getInventorySummary({ models })).resolves.toEqual({
       activeBatches: 4,
       availableBatches: 3,
+      inProcessingBatches: 0,
       availableAreaTrackedBatches: 3,
       totalAvailableSqFt: 321.4568,
       individualSlabs: 7,
+      inProcessingSlabs: 2,
       depletedOrZeroStockBatches: 1,
       depletedBatches: 1,
       inventoryCostValues: [

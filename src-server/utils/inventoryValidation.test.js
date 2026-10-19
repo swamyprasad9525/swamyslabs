@@ -43,6 +43,12 @@ describe('inventory list validation', () => {
 
   it('bounds movement and slab history pagination', () => {
     expect(parseInventoryChildListQuery({ page: '2', limit: '50' }).value).toEqual({ page: 2, limit: 50 });
+    expect(parseInventoryChildListQuery({ status: 'AVAILABLE' }).value).toEqual({
+      page: 1,
+      limit: 50,
+      status: 'AVAILABLE',
+    });
+    expect(parseInventoryChildListQuery({ status: 'NOT_A_STATUS' }).error).toMatch(/Status/);
     expect(parseInventoryChildListQuery({ limit: '500' }).error).toMatch(/Limit/);
   });
 });

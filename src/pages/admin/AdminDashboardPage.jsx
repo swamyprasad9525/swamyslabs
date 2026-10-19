@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  AlertCircle,
   ArrowRight,
   Boxes,
   BriefcaseBusiness,
+  CalendarClock,
   CheckCircle2,
   CircleDollarSign,
+  ClipboardCheck,
   Clock3,
+  Factory,
   FileText,
   History,
   PackageCheck,
+  PackageOpen,
   RefreshCw,
   Sparkles,
   SquareStack,
@@ -48,6 +53,14 @@ import {
   labelInventoryStatus,
   parseInventoryResponse,
 } from '../../lib/inventory';
+import {
+  currentProcessingOperation,
+  formatProcessingDate,
+  labelProcessingOperation,
+  labelProcessingStatus,
+  parseProcessingResponse,
+  PROCESSING_STATUS_STYLES,
+} from '../../lib/processing';
 
 const COMMERCIAL_METRICS = [
   { key: 'NEW', label: 'New leads', icon: Sparkles, tone: 'blue' },
@@ -130,6 +143,40 @@ function InventoryRow({ batch }) {
   );
 }
 
+function ProcessingJobRow({ job }) {
+  const currentOperation = currentProcessingOperation(job);
+  const stoneName = job.stoneSnapshot?.name || 'Stone not recorded';
+  const batchNumber = job.input?.batchNumber || 'Batch not recorded';
+  const operationLabel = currentOperation
+    ? labelProcessingOperation(currentOperation.operation)
+    : job.status === 'COMPLETED'
+      ? 'Production complete'
+      : 'No active operation';
+
+  return (
+    <Link
+      to={`/admin/processing/jobs/${job._id}`}
+      className='group grid gap-3 border-b border-stone-100 px-4 py-3 text-left no-underline last:border-b-0 hover:bg-stone-50 sm:grid-cols-[minmax(0,1.1fr)_minmax(9rem,.7fr)_auto] sm:items-center sm:px-5'
+    >
+      <span className='min-w-0'>
+        <span className='block font-mono text-xs font-bold text-amber-800'>{job.jobNumber || 'Processing job'}</span>
+        <span className='mt-0.5 block truncate text-sm font-bold text-stone-900'>{stoneName}</span>
+        <span className='mt-0.5 block truncate font-mono text-xs text-stone-500'>{batchNumber}</span>
+      </span>
+      <span className='min-w-0 text-xs text-stone-600'>
+        <span className='block truncate font-bold text-stone-800'>{operationLabel}</span>
+        <span className='mt-0.5 block'>Due {formatProcessingDate(job.expectedCompletionDate)}</span>
+      </span>
+      <span className='flex items-center justify-between gap-3 sm:block sm:text-right'>
+        <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${PROCESSING_STATUS_STYLES[job.status] || PROCESSING_STATUS_STYLES.DRAFT}`}>
+          {labelProcessingStatus(job.status)}
+        </span>
+        <span className='text-xs text-stone-500 sm:mt-1.5 sm:block'>{formatProcessingDate(job.updatedAt)}</span>
+      </span>
+    </Link>
+  );
+}
+
 export default function AdminDashboardPage() {
   const { authFetch, logout } = useAdmin();
   const navigate = useNavigate();
@@ -141,6 +188,10 @@ export default function AdminDashboardPage() {
   const [recentBatches, setRecentBatches] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [inventoryError, setInventoryError] = useState('');
+  const [processingSummary, setProcessingSummary] = useState(null);
+  const [recentProcessingJobs, setRecentProcessingJobs] = useState([]);
+  const [processingLoading, setProcessingLoading] = useState(true);
+  const [processingError, setProcessingError] = useState('');
 
   const expireSession = useCallback(() => {
     logout();
@@ -197,29 +248,55 @@ export default function AdminDashboardPage() {
     }
   }, [authFetch, expireSession]);
 
+  const loadProcessing = useCallback(async () => {
+    setProcessingLoading(true);
+    setProcessingError('');
+    try {
+      const [summaryResponse, jobsResponse] = await Promise.all([
+        authFetch('/api/admin/processing/summary'),
+        authFetch('/api/admin/processing/jobs?page=1&limit=5'),
+      ]);
+      if (summaryResponse.status === 401 || jobsResponse.status === 401) {
+        expireSession();
+        return;
+      }
+      const [summaryData, jobsData] = await Promise.all([
+        parseProcessingResponse(summaryResponse, 'Unable to load production summary.'),
+        parseProcessingResponse(jobsResponse, 'Unable to load recent processing jobs.'),
+      ]);
+      setProcessingSummary(summaryData.summary || {});
+      setRecentProcessingJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
+    } catch (requestError) {
+      setProcessingError(requestError.message || 'Unable to load production dashboard data.');
+    } finally {
+      setProcessingLoading(false);
+    }
+  }, [authFetch, expireSession]);
+
   useEffect(() => {
     loadCrm();
     loadInventory();
-  }, [loadCrm, loadInventory]);
+    loadProcessing();
+  }, [loadCrm, loadInventory, loadProcessing]);
 
   const stageCounts = useMemo(() => normalizeCountMap(crmDashboard?.byStage), [crmDashboard?.byStage]);
   const recentLeads = Array.isArray(crmDashboard?.recentLeads) ? crmDashboard.recentLeads : [];
   const costValues = Array.isArray(inventorySummary?.inventoryCostValues)
     ? inventorySummary.inventoryCostValues.filter((item) => item?.currency && Number.isFinite(Number(item.amount)))
     : [];
-  const refreshing = crmLoading || inventoryLoading;
+  const refreshing = crmLoading || inventoryLoading || processingLoading;
 
   return (
     <AdminPage className="space-y-8">
       <AdminPageHeader
         eyebrow="Operations workspace"
         title="Business Dashboard"
-        description="Current commercial and inventory records from the connected admin APIs. No order, revenue, dispatch, or production data is inferred."
+        description="Current commercial, inventory, and production records from the connected admin APIs. No order, revenue, or dispatch data is inferred."
         actions={(
           <>
             <button
               type="button"
-              onClick={() => { loadCrm(); loadInventory(); }}
+              onClick={() => { loadCrm(); loadInventory(); loadProcessing(); }}
               disabled={refreshing}
               className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 text-xs font-bold text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -252,8 +329,8 @@ export default function AdminDashboardPage() {
           <MetricsSkeleton count={6} />
         ) : crmDashboard ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            {COMMERCIAL_METRICS.map((metric) => (
-              <AdminMetricCard key={metric.key} {...metric} value={integer(stageCounts[metric.key])} to="/admin/crm" />
+            {COMMERCIAL_METRICS.map(({ key, ...metric }) => (
+              <AdminMetricCard key={key} {...metric} value={integer(stageCounts[key])} to="/admin/crm" />
             ))}
             <AdminMetricCard label="Customers" value={integer(crmDashboard.metrics?.customers)} icon={UsersRound} tone="stone" to="/admin/customers" />
             <AdminMetricCard label="Invoice records" value={integer(crmDashboard.metrics?.invoices)} detail="Persisted invoices" icon={FileText} tone="stone" to="/admin/invoices" />
@@ -346,6 +423,62 @@ export default function AdminDashboardPage() {
             >
               {recentBatches.length ? recentBatches.map((batch) => <InventoryRow key={batch._id} batch={batch} />) : (
                 <AdminEmptyState icon={Boxes} title="No inventory batches yet" description="Verified inventory will appear here after a batch is recorded." />
+              )}
+            </AdminPanel>
+          </>
+        ) : null}
+      </section>
+
+      <section className="space-y-4" aria-labelledby="processing-overview-heading" aria-busy={processingLoading}>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="processing-overview-heading" className="text-lg font-bold text-stone-950">Processing</h2>
+            <p className="mt-0.5 text-xs leading-5 text-stone-500">Persisted production jobs, quality gates, schedules, and material currently outside available stock.</p>
+          </div>
+          <AdminTextLink to="/admin/processing">Open processing</AdminTextLink>
+        </div>
+
+        {processingError && (
+          <AdminFeedback title={processingSummary ? 'Processing refresh failed' : 'Processing data unavailable'} onRetry={loadProcessing}>
+            {processingSummary ? `Showing the last loaded records. ${processingError}` : processingError}
+          </AdminFeedback>
+        )}
+
+        {processingLoading && !processingSummary ? (
+          <>
+            <MetricsSkeleton count={6} />
+            <AdminPanel title="Recently changed processing jobs" icon={Factory}>
+              <AdminLoadingState label="Loading recent processing jobs" compact />
+            </AdminPanel>
+          </>
+        ) : processingSummary ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <AdminMetricCard label="Planned" value={integer(processingSummary.plannedJobs)} icon={CalendarClock} tone="blue" to="/admin/processing" />
+              <AdminMetricCard label="In production" value={integer(processingSummary.inProgressJobs)} icon={Factory} tone="amber" to="/admin/processing" />
+              <AdminMetricCard label="QC pending" value={integer(processingSummary.qcPendingJobs)} icon={ClipboardCheck} tone="violet" to="/admin/processing" />
+              <AdminMetricCard label="Overdue" value={integer(processingSummary.overdueJobs)} detail="Only jobs with a recorded due date." icon={AlertCircle} tone="rose" to="/admin/processing" />
+              <AdminMetricCard
+                label="Material in processing"
+                value={`${integer(processingSummary.materialInProcessing?.jobs)} jobs`}
+                detail={processingSummary.materialInProcessing?.areaSqFt == null
+                  ? 'No active input area is recorded.'
+                  : `${formatInventoryNumber(processingSummary.materialInProcessing.areaSqFt)} sq.ft recorded across ${integer(processingSummary.materialInProcessing.areaTrackedJobs)} area-tracked jobs.`}
+                icon={PackageOpen}
+                tone="stone"
+                to="/admin/processing"
+              />
+              <AdminMetricCard label="Completed recently" value={integer(processingSummary.completedRecently)} detail="Completed during the backend-defined 30-day window." icon={CheckCircle2} tone="emerald" to="/admin/processing" />
+            </div>
+
+            <AdminPanel
+              title="Recently changed processing jobs"
+              description="Jobs ordered by their latest persisted update. No production state is inferred."
+              icon={Factory}
+              action={<AdminTextLink to="/admin/processing">All processing jobs</AdminTextLink>}
+            >
+              {recentProcessingJobs.length ? recentProcessingJobs.map((job) => <ProcessingJobRow key={job._id} job={job} />) : (
+                <AdminEmptyState icon={Factory} title="No processing jobs yet" description="Verified jobs will appear here after a processing plan is recorded." />
               )}
             </AdminPanel>
           </>

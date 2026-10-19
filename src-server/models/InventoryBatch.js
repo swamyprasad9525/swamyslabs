@@ -102,6 +102,12 @@ const inventoryBatchSchema = new Schema({
     default: 'DRAFT',
     index: true,
   },
+  activeProcessingJob: {
+    type: Schema.Types.ObjectId,
+    ref: 'ProcessingJob',
+    default: null,
+    index: true,
+  },
   createdBy: { type: String, required: true, trim: true, maxlength: 120, immutable: true },
   updatedBy: { type: String, trim: true, maxlength: 120 },
 }, {

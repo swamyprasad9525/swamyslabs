@@ -1,0 +1,51 @@
+export const PROCESSING_JOB_STATUSES = Object.freeze([
+  'DRAFT',
+  'PLANNED',
+  'IN_PROGRESS',
+  'QC_PENDING',
+  'COMPLETED',
+  'CANCELLED',
+]);
+
+export const PROCESSING_OPERATION_TYPES = Object.freeze([
+  'CUTTING',
+  'SHAPING',
+  'CALIBRATION',
+  'HONING',
+  'POLISHING',
+  'TUMBLING',
+  'EDGE_FINISH',
+]);
+
+export const PROCESSING_OPERATION_STATUSES = Object.freeze([
+  'PENDING',
+  'IN_PROGRESS',
+  'COMPLETED',
+]);
+
+export const PROCESSING_QC_RESULTS = Object.freeze([
+  'PASS',
+  'HOLD',
+  'FAIL',
+]);
+
+export const PROCESSING_EVENT_TYPES = Object.freeze([
+  'JOB_CREATED',
+  'JOB_PLANNED',
+  'JOB_STARTED',
+  'OPERATION_STARTED',
+  'OPERATION_COMPLETED',
+  'QC_RECORDED',
+  'JOB_COMPLETED',
+  'JOB_CANCELLED',
+  'NOTE',
+]);
+
+export const PROCESSING_REFERENCE_PREFIX = 'PJ';
+export const DEFAULT_PROCESSING_PAGE_SIZE = 20;
+export const MAX_PROCESSING_PAGE_SIZE = 100;
+
+export const ACTIVE_PROCESSING_JOB_STATUSES = Object.freeze([
+  'IN_PROGRESS',
+  'QC_PENDING',
+]);

@@ -276,7 +276,10 @@ export function parseInventoryListQuery(query = {}) {
 }
 
 export function parseInventoryChildListQuery(query = {}) {
-  return runValidation(() => paginationValue(query, new Set(['page', 'limit']), 50));
+  return runValidation(() => compact({
+    ...paginationValue(query, new Set(['page', 'limit', 'status']), 50),
+    status: enumValue(query.status, 'Status', INVENTORY_STATUSES),
+  }));
 }
 
 export function validateInventoryBatchCreate(body) {

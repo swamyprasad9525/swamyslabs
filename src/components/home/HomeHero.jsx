@@ -8,7 +8,7 @@ export default function HomeHero() {
 
   return (
     <section className="relative min-h-[760px] overflow-hidden bg-stone-950 text-white md:min-h-[820px]" aria-labelledby="home-hero-title">
-      <img src="/main.webp" alt="Dark natural stone slabs with textured finished surfaces" width="1536" height="2048" fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover object-[64%_50%] opacity-80" />
+      <img src="/main.webp" alt="Dark natural stone slabs with textured finished surfaces" width="1536" height="2048" fetchpriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover object-[64%_50%] opacity-80" />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(13,12,10,.92)_0%,rgba(13,12,10,.72)_42%,rgba(13,12,10,.15)_78%),linear-gradient(0deg,rgba(13,12,10,.72)_0%,transparent_42%)]" />
       <div className="absolute inset-0 opacity-[.12] [background-image:linear-gradient(rgba(255,255,255,.14)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.14)_1px,transparent_1px)] [background-size:80px_80px]" aria-hidden="true" />
 
