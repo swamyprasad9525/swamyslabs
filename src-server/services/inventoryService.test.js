@@ -17,6 +17,7 @@ import {
   createInventorySlab,
   formatInventoryReference,
   getInventorySummary,
+  getPublicStoneAvailability,
   inventoryCostValue,
   listInventoryBatches,
   locationsEqual,
@@ -184,6 +185,7 @@ describe('batch creation', () => {
       batchNumber: 'BAT-2026-0001',
       stoneRef,
       inventoryMode: 'BATCH',
+      publicAvailabilityVisible: false,
       createdBy: ACTOR,
     }));
     expect(models.InventoryMovementModel.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -194,6 +196,26 @@ describe('batch creation', () => {
       actor: ACTOR,
     }));
     expect(result.movements).toHaveLength(1);
+  });
+
+  it('normalizes an explicit public visibility opt-in and rejects non-booleans', async () => {
+    const models = createModels();
+    await createInventoryBatch({
+      input: baseCreateInput({ publicAvailabilityVisible: true }),
+      actor: ACTOR,
+      now: NOW,
+      models,
+    });
+    expect(models.InventoryBatchModel.create).toHaveBeenCalledWith(expect.objectContaining({
+      publicAvailabilityVisible: true,
+    }));
+
+    await expect(createInventoryBatch({
+      input: baseCreateInput({ publicAvailabilityVisible: 'true' }),
+      actor: ACTOR,
+      now: NOW,
+      models: createModels(),
+    })).rejects.toThrow('must be true or false');
   });
 
   it('rejects negative received quantity and area before persistence', async () => {
@@ -254,6 +276,67 @@ describe('batch creation', () => {
       actor: ACTOR,
       models: createModels(),
     })).rejects.toThrow('created from actual slab receipts');
+  });
+});
+
+describe('public catalog availability', () => {
+  it('maps a requested catalog slug to its canonical identity before querying inventory', async () => {
+    const models = createModels();
+    models.InventoryBatchModel.exists.mockResolvedValue(null);
+
+    const result = await getPublicStoneAvailability({
+      stoneSlug: '  TANDUR-YELLOW-LIMESTONE-COBBLE-PREMIUM  ',
+      models,
+    });
+
+    expect(models.InventoryBatchModel.exists).toHaveBeenCalledWith({
+      'stoneRef.slug': stoneRef.slug,
+      publicAvailabilityVisible: true,
+      status: 'AVAILABLE',
+      $or: [
+        { 'quantity.currentCount': { $gt: 0 } },
+        { 'area.availableSqFt': { $gt: 0 } },
+      ],
+    });
+    expect(result.stone).toEqual({ slug: stoneRef.slug, name: stoneRef.name });
+  });
+
+  it('keeps availability private when no explicitly visible stock exists', async () => {
+    const models = createModels();
+    models.InventoryBatchModel.exists.mockResolvedValue(null);
+
+    await expect(getPublicStoneAvailability({ stoneSlug: stoneRef.slug, models })).resolves.toEqual({
+      stone: { slug: stoneRef.slug, name: stoneRef.name },
+      availability: {
+        status: 'CONFIRM_DURING_QUOTATION',
+        message: 'Availability is confirmed during quotation.',
+      },
+    });
+  });
+
+  it('returns only a safe status and message for explicitly visible available stock', async () => {
+    const models = createModels();
+    models.InventoryBatchModel.exists.mockResolvedValue({ _id: BATCH_ID });
+
+    const result = await getPublicStoneAvailability({ stoneSlug: stoneRef.slug, models });
+
+    expect(result).toEqual({
+      stone: { slug: stoneRef.slug, name: stoneRef.name },
+      availability: {
+        status: 'AVAILABLE_FOR_ENQUIRY',
+        message: 'Currently available for enquiry. Final selection and quantity are confirmed during quotation.',
+      },
+    });
+    expect(Object.keys(result)).toEqual(['stone', 'availability']);
+    expect(Object.keys(result.availability)).toEqual(['status', 'message']);
+  });
+
+  it('rejects a slug outside the canonical catalog without querying inventory', async () => {
+    const models = createModels();
+
+    await expect(getPublicStoneAvailability({ stoneSlug: 'not-a-catalog-stone', models }))
+      .rejects.toMatchObject({ status: 404, code: 'STONE_NOT_FOUND' });
+    expect(models.InventoryBatchModel.exists).not.toHaveBeenCalled();
   });
 });
 
@@ -465,6 +548,41 @@ describe('integrity, reporting and query safety', () => {
       actor: ACTOR,
       models: createModels(),
     })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('updates public visibility only through the explicit metadata allowlist', async () => {
+    const batch = batchDocument({ publicAvailabilityVisible: false });
+    const models = createModels({ batch });
+
+    await updateInventoryBatch({
+      batchId: BATCH_ID,
+      updates: { publicAvailabilityVisible: true },
+      actor: ACTOR,
+      models,
+    });
+
+    expect(batch.publicAvailabilityVisible).toBe(true);
+    expect(batch.save).toHaveBeenCalledOnce();
+    await expect(updateInventoryBatch({
+      batchId: BATCH_ID,
+      updates: { publicAvailabilityVisible: 'false' },
+      actor: ACTOR,
+      models: createModels({ batch: batchDocument() }),
+    })).rejects.toThrow('must be true or false');
+  });
+
+  it('defaults public availability visibility off at the schema boundary', () => {
+    const batch = new InventoryBatch({
+      batchNumber: 'BAT-2026-0098',
+      stoneRef,
+      inventoryMode: 'BATCH',
+      receivedDate: NOW,
+      quantity: { receivedCount: 1, currentCount: 1 },
+      location: { warehouse: 'Test Yard' },
+      status: 'AVAILABLE',
+      createdBy: ACTOR,
+    });
+    expect(batch.publicAvailabilityVisible).toBe(false);
   });
 
   it('returns valuation totals separated by currency', async () => {

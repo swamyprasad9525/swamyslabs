@@ -10,6 +10,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import MaterialMediaViewer from '../components/stones/MaterialMediaViewer';
+import StoneAvailabilityNotice from '../components/stones/StoneAvailabilityNotice';
 import StoneCard from '../components/stones/StoneCard';
 import EnquiryForm from '../components/EnquiryForm';
 import SEO from '../components/SEO';
@@ -243,11 +244,7 @@ export default function StoneDetailsPage() {
                 </p>
               )}
 
-              <div className="mt-8 border-y border-[var(--color-border)] py-6">
-                <p className="text-sm leading-6 text-stone-600">
-                  Final finish, dimensions, quantity and availability are confirmed for each project during quotation.
-                </p>
-              </div>
+              <StoneAvailabilityNotice stoneSlug={stone.slug} />
 
               <div className="mt-7 grid gap-3 sm:grid-cols-2">
                 <ActionLink to={`/project-planner?stone=${encodeURIComponent(stone.slug)}`}>

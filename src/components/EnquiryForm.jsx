@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, FileText, Upload, X } from 'lucide-react';
 import { apiRequest, createSubmissionId } from '../lib/api';
+import { buildEnquirySubmissionData } from '../lib/enquirySubmission';
 
 const EMPTY_FORM = {
     customerName: '',
@@ -28,7 +29,6 @@ export default function EnquiryForm({ isOpen, onClose, product }) {
     const materialType = product?.materialFamily || product?.materialType || '';
     const selectedFinish = product?.selectedFinish || product?.finish || '';
     const thickness = product?.thickness || '';
-    const canonicalPath = product?.canonicalPath || (product?.slug ? `/stones/${product.slug}` : '/stones');
     const contextSummary = typeof product?.contextSummary === 'string'
         ? product.contextSummary.trim().slice(0, 2200)
         : '';
@@ -100,40 +100,11 @@ export default function EnquiryForm({ isOpen, onClose, product }) {
         setStatus('submitting');
         setErrorMessage('');
 
-        const data = new FormData();
-        data.append('submissionId', submissionIdRef.current || createSubmissionId());
-        data.append('source', product?.crmSource || 'STONE_ENQUIRY');
-        data.append('productName', product?.name || 'Project enquiry');
-        data.append('productId', product?.stoneId || product?.id || '');
-        data.append('productSlug', product?.slug || '');
-        data.append('productUrl', canonicalPath);
-        data.append('customerName', formData.customerName);
-        data.append('company', formData.company);
-        data.append('email', formData.email);
-        data.append('phoneNumber', formData.phoneNumber);
-        data.append('projectLocation', formData.projectLocation);
-        data.append('materialType', materialType);
-        data.append('selectedFinish', selectedFinish);
-        data.append('thickness', thickness);
-        data.append('quantity', formData.quantity);
-        data.append('message', formData.message.trim());
-        const leadContext = product?.leadContext || {};
-        [
-            'application',
-            'enteredArea',
-            'projectAreaSqFt',
-            'planningAllowancePercent',
-            'requiredAreaSqFt',
-            'estimatedSlabs',
-            'indicativeMaterialEstimate',
-        ].forEach((field) => {
-            const value = leadContext[field];
-            if (value !== null && value !== undefined && value !== '') data.append(field, String(value));
+        const data = buildEnquirySubmissionData({
+            formValues: formData,
+            product,
+            submissionId: submissionIdRef.current || createSubmissionId(),
         });
-        if (Array.isArray(product?.materialSelections) && product.materialSelections.length) {
-            data.append('materialSelections', JSON.stringify(product.materialSelections));
-        }
-        if (formData.file) data.append('file', formData.file);
 
         try {
             const result = await apiRequest('/api/leads', { method: 'POST', body: data });

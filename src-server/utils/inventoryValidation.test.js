@@ -132,6 +132,17 @@ describe('inventory batch validation', () => {
     expect(validateInventoryBatchCreate(batchInput({ status: 'HOLD' })).value.status).toBe('HOLD');
   });
 
+  it('accepts only explicit booleans for public availability visibility', () => {
+    expect(validateInventoryBatchCreate(batchInput({ publicAvailabilityVisible: true })).value)
+      .toMatchObject({ publicAvailabilityVisible: true });
+    expect(validateInventoryBatchCreate(batchInput({ publicAvailabilityVisible: 'true' })).error)
+      .toMatch(/true or false/);
+    expect(validateInventoryBatchUpdate({ publicAvailabilityVisible: false }).value)
+      .toEqual({ publicAvailabilityVisible: false });
+    expect(validateInventoryBatchUpdate({ publicAvailabilityVisible: 1 }).error)
+      .toMatch(/true or false/);
+  });
+
   it('uses an explicit batch update allowlist', () => {
     for (const forbidden of ['batchNumber', 'stoneRef', 'stoneSlug', 'inventoryMode', 'receivedCount', 'receivedSqFt', 'quantity', 'area', 'location']) {
       expect(validateInventoryBatchUpdate({ [forbidden]: 'attempted-change' }).error).toMatch(/Unsupported/);

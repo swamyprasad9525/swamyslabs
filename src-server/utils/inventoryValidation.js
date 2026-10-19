@@ -28,6 +28,7 @@ const BATCH_CREATE_FIELDS = new Set([
   'grade',
   'shade',
   'notes',
+  'publicAvailabilityVisible',
   'status',
 ]);
 
@@ -43,6 +44,7 @@ const BATCH_UPDATE_FIELDS = new Set([
   'grade',
   'shade',
   'notes',
+  'publicAvailabilityVisible',
   'status',
 ]);
 
@@ -135,6 +137,12 @@ function enumValue(value, label, values, { required = false } = {}) {
   const normalized = value.trim().toUpperCase();
   if (!values.includes(normalized)) fail(`${label} is invalid.`);
   return normalized;
+}
+
+function optionalBoolean(value, label) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'boolean') fail(`${label} must be true or false.`);
+  return value;
 }
 
 function dateValue(value, label, { required = false } = {}) {
@@ -325,6 +333,10 @@ export function validateInventoryBatchCreate(body) {
       grade: optionalText(body.grade, 'Grade', 100),
       shade: optionalText(body.shade, 'Shade', 100),
       notes: optionalText(body.notes, 'Notes', 3000),
+      publicAvailabilityVisible: optionalBoolean(
+        body.publicAvailabilityVisible,
+        'Public availability visibility',
+      ),
       status: inventoryMode === 'BATCH'
         ? enumValue(body.status, 'Status', ['AVAILABLE', 'HOLD'])
         : undefined,
@@ -351,6 +363,10 @@ export function validateInventoryBatchUpdate(body) {
       grade: optionalText(body.grade, 'Grade', 100),
       shade: optionalText(body.shade, 'Shade', 100),
       notes: optionalText(body.notes, 'Notes', 3000),
+      publicAvailabilityVisible: optionalBoolean(
+        body.publicAvailabilityVisible,
+        'Public availability visibility',
+      ),
       status: enumValue(body.status, 'Status', ['AVAILABLE', 'HOLD', 'ARCHIVED']),
     });
     if (!Object.keys(updates).length) fail('At least one permitted batch field is required.');

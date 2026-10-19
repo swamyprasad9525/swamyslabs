@@ -90,6 +90,11 @@ const inventoryBatchSchema = new Schema({
   grade: { type: String, trim: true, maxlength: 100 },
   shade: { type: String, trim: true, maxlength: 100 },
   notes: { type: String, trim: true, maxlength: 3000 },
+  publicAvailabilityVisible: {
+    type: Boolean,
+    required: true,
+    default: false,
+  },
   status: {
     type: String,
     enum: INVENTORY_STATUSES,
@@ -127,6 +132,7 @@ inventoryBatchSchema.pre('validate', function validateInventoryBatch() {
 });
 
 inventoryBatchSchema.index({ 'stoneRef.slug': 1, status: 1 });
+inventoryBatchSchema.index({ 'stoneRef.slug': 1, publicAvailabilityVisible: 1, status: 1 });
 inventoryBatchSchema.index({ status: 1, updatedAt: -1 });
 inventoryBatchSchema.index({ finish: 1, status: 1 });
 inventoryBatchSchema.index({ 'location.warehouse': 1, status: 1 });

@@ -58,6 +58,7 @@ const EMPTY_FORM = Object.freeze({
   pricePerSqFt: '',
   sellingCurrency: '',
   notes: '',
+  publicAvailabilityVisible: false,
   status: '',
 });
 
@@ -97,6 +98,7 @@ function batchToForm(batch) {
     pricePerSqFt: selling.amount ?? '',
     sellingCurrency: selling.currency || '',
     notes: batch.notes || '',
+    publicAvailabilityVisible: Boolean(batch.publicAvailabilityVisible),
     status: batch.status || '',
   };
 }
@@ -182,7 +184,11 @@ export default function InventoryBatchFormPage() {
 
   function updateField(field) {
     return (event) => {
-      const value = field.toLowerCase().includes('currency') ? event.target.value.toUpperCase() : event.target.value;
+      const value = event.target.type === 'checkbox'
+        ? event.target.checked
+        : field.toLowerCase().includes('currency')
+          ? event.target.value.toUpperCase()
+          : event.target.value;
       setForm((current) => ({ ...current, [field]: value }));
       setError('');
     };
@@ -205,6 +211,7 @@ export default function InventoryBatchFormPage() {
       grade: form.grade.trim(),
       shade: form.shade.trim(),
       notes: form.notes.trim(),
+      publicAvailabilityVisible: form.publicAvailabilityVisible,
     });
 
     if (editing) {
@@ -370,10 +377,22 @@ export default function InventoryBatchFormPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Field id="cost-rate" label="Cost per sq.ft"><input id="cost-rate" type="number" min="0" step="0.0001" value={form.costPerSqFt} onChange={updateField('costPerSqFt')} className={inputClass} /></Field><Field id="cost-currency" label="Cost currency"><input id="cost-currency" maxLength={3} minLength={3} placeholder="3-letter code" value={form.costCurrency} onChange={updateField('costCurrency')} className={`${inputClass} uppercase`} /></Field><Field id="selling-rate" label="Selling price per sq.ft"><input id="selling-rate" type="number" min="0" step="0.0001" value={form.pricePerSqFt} onChange={updateField('pricePerSqFt')} className={inputClass} /></Field><Field id="selling-currency" label="Selling currency"><input id="selling-currency" maxLength={3} minLength={3} placeholder="3-letter code" value={form.sellingCurrency} onChange={updateField('sellingCurrency')} className={`${inputClass} uppercase`} /></Field></div>
         </FormSection>
 
-        <FormSection icon={Save} title="Status and notes" description="Notes and cost information remain protected admin data.">
+        <FormSection icon={Save} title="Status, public visibility and notes" description="Internal notes and commercial data remain protected admin data.">
           <div className="grid gap-4 sm:grid-cols-[14rem_minmax(0,1fr)]">
             {editing && <Field id="batch-status" label="Batch status" hint="Depleted remains derived from stock; archiving does not delete history."><select id="batch-status" value={form.status} onChange={updateField('status')} className={inputClass}>{!permittedStatusOptions.some(({ value }) => value === form.status) && <option value={form.status}>{INVENTORY_STATUSES.find(({ value }) => value === form.status)?.label || form.status}</option>}{permittedStatusOptions.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Field>}
             <Field id="batch-notes" label="Internal notes"><textarea id="batch-notes" rows={5} maxLength={3000} value={form.notes} onChange={updateField('notes')} className={`${inputClass} resize-y`} /></Field>
+            <label className="flex items-start gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4 sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={form.publicAvailabilityVisible}
+                onChange={updateField('publicAvailabilityVisible')}
+                className="mt-1 h-4 w-4 rounded border-stone-300 text-amber-700 focus:ring-amber-500"
+              />
+              <span>
+                <span className="block text-xs font-black text-stone-800">Show a general availability signal on the public stone page</span>
+                <span className="mt-1 block text-[11px] leading-5 text-stone-500">Off by default. When this batch is available with stock on hand, the website may say the material is available for enquiry. Exact quantity, cost, supplier and location are never published.</span>
+              </span>
+            </label>
           </div>
         </FormSection>
 

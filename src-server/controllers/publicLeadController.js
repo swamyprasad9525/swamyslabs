@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
 import { connectDB } from '../config/database.js';
-import { sendLeadNotification } from '../services/emailService.js';
+import {
+  isEmailNotificationConfigured,
+  sendLeadNotification,
+} from '../services/emailService.js';
 import { persistLeadSubmission, publicLeadResponse } from '../services/crmService.js';
 import { validateAndNormalizeUpload } from '../utils/security.js';
 import { validatePublicCallback, validatePublicEnquiry } from '../utils/validation.js';
@@ -22,7 +25,7 @@ async function persistAndRespond(req, res, validation, attachment = null) {
   const result = await persistLeadSubmission({
     payload,
     attachment,
-    notify: sendLeadNotification,
+    notify: isEmailNotificationConfigured() ? sendLeadNotification : undefined,
   });
 
   if (result.notificationFailed) {

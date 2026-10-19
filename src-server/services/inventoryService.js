@@ -37,6 +37,7 @@ const BATCH_METADATA_FIELDS = Object.freeze([
   'grade',
   'shade',
   'notes',
+  'publicAvailabilityVisible',
   'status',
 ]);
 
@@ -100,6 +101,12 @@ function numberValue(value, field, {
     throw new InventoryError(`${field} must be ${positive ? 'greater than zero' : 'zero or greater'}.`);
   }
   return normalized;
+}
+
+function booleanValue(value, field, { defaultValue } = {}) {
+  if (value === undefined || value === null) return defaultValue;
+  if (typeof value !== 'boolean') throw new InventoryError(`${field} must be true or false.`);
+  return value;
 }
 
 function dateValue(value, field) {
@@ -415,6 +422,11 @@ function normalizeCreateBatch(input, actor, now) {
     grade: optionalString(input.grade, 'Grade', 100),
     shade: optionalString(input.shade, 'Shade', 100),
     notes: optionalString(input.notes, 'Notes', 3000),
+    publicAvailabilityVisible: booleanValue(
+      input.publicAvailabilityVisible,
+      'Public availability visibility',
+      { defaultValue: false },
+    ),
     status: requestedStatus,
     createdBy: actor,
     updatedBy: actor,
@@ -687,10 +699,59 @@ export async function updateInventoryBatch({
   if ('grade' in updates) batch.grade = optionalString(updates.grade, 'Grade', 100);
   if ('shade' in updates) batch.shade = optionalString(updates.shade, 'Shade', 100);
   if ('notes' in updates) batch.notes = optionalString(updates.notes, 'Notes', 3000);
+  if ('publicAvailabilityVisible' in updates) {
+    batch.publicAvailabilityVisible = booleanValue(
+      updates.publicAvailabilityVisible,
+      'Public availability visibility',
+    );
+  }
   if ('status' in updates) batch.status = statusForMetadataUpdate(batch, updates.status);
   batch.updatedBy = authenticatedActor;
   await batch.save(session ? { session } : undefined);
   return batch;
+}
+
+export async function getPublicStoneAvailability({
+  stoneSlug,
+  models: modelOverrides,
+}) {
+  let stone;
+  try {
+    stone = canonicalStoneSnapshot({ slug: stoneSlug });
+  } catch (error) {
+    if (error instanceof InventoryError && error.code === 'INVALID_STONE') {
+      throw new InventoryError('Catalog stone was not found.', 404, 'STONE_NOT_FOUND');
+    }
+    throw error;
+  }
+
+  const { InventoryBatchModel } = resolveModels(modelOverrides);
+  const visibleAvailableBatch = await InventoryBatchModel.exists({
+    'stoneRef.slug': stone.slug,
+    publicAvailabilityVisible: true,
+    status: 'AVAILABLE',
+    $or: [
+      { 'quantity.currentCount': { $gt: 0 } },
+      { 'area.availableSqFt': { $gt: 0 } },
+    ],
+  });
+  const availableForEnquiry = Boolean(visibleAvailableBatch);
+
+  return {
+    stone: {
+      slug: stone.slug,
+      name: stone.name,
+    },
+    availability: availableForEnquiry
+      ? {
+        status: 'AVAILABLE_FOR_ENQUIRY',
+        message: 'Currently available for enquiry. Final selection and quantity are confirmed during quotation.',
+      }
+      : {
+        status: 'CONFIRM_DURING_QUOTATION',
+        message: 'Availability is confirmed during quotation.',
+      },
+  };
 }
 
 function derivedStatusExpression(quantityExpression, areaExpression) {

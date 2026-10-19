@@ -276,7 +276,7 @@ export default function LeadPipelinePage() {
       )}
 
       <div className="overflow-x-auto overscroll-x-contain rounded-xl" aria-label="Lead pipeline columns">
-        <div className="grid min-w-[1160px] grid-cols-5 gap-3 pb-3">
+        <div className="grid min-w-[1080px] grid-cols-5 gap-3 pb-3">
           {LEAD_STAGES.map((stage) => (
             <PipelineColumn
               key={stage.value}

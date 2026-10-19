@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BriefcaseBusiness,
+  ChevronRight,
   ExternalLink,
   FileText,
   LayoutDashboard,
@@ -30,6 +31,26 @@ const SECTION_LABELS = [
   { prefix: '/admin/inventory', label: 'Inventory' },
   { prefix: '/admin/invoices', label: 'Invoices' },
 ];
+
+function getAdminBreadcrumbs(pathname) {
+  const section = SECTION_LABELS.find(({ prefix }) => pathname.startsWith(prefix));
+  if (!section) return [{ label: 'Admin workspace' }];
+  if (pathname === section.prefix) return [{ label: section.label }];
+
+  let detailLabel = 'Details';
+  if (pathname === '/admin/inventory/batches/new') detailLabel = 'New batch';
+  else if (pathname.endsWith('/edit')) detailLabel = 'Edit';
+  else if (pathname === '/admin/invoices/new') detailLabel = 'New invoice';
+  else if (section.label === 'CRM') detailLabel = 'Lead detail';
+  else if (section.label === 'Customers') detailLabel = 'Customer detail';
+  else if (section.label === 'Inventory') detailLabel = 'Batch detail';
+  else if (section.label === 'Invoices') detailLabel = 'Invoice detail';
+
+  return [
+    { label: section.label, to: section.prefix },
+    { label: detailLabel },
+  ];
+}
 
 const focusableSelector = [
   'a[href]',
@@ -80,8 +101,8 @@ export default function AdminLayout() {
   const drawerRef = useRef(null);
   const menuButtonRef = useRef(null);
 
-  const sectionLabel = useMemo(
-    () => SECTION_LABELS.find(({ prefix }) => location.pathname.startsWith(prefix))?.label || 'Admin Portal',
+  const breadcrumbs = useMemo(
+    () => getAdminBreadcrumbs(location.pathname),
     [location.pathname],
   );
 
@@ -141,7 +162,7 @@ export default function AdminLayout() {
       {mobileOpen && (
         <button
           type="button"
-          className="no-print fixed inset-0 z-40 h-full w-full cursor-default bg-stone-950/70 backdrop-blur-sm md:hidden"
+          className="no-print fixed inset-0 z-40 h-full w-full cursor-default bg-stone-950/70 backdrop-blur-sm lg:hidden"
           aria-label="Close admin navigation"
           onClick={() => closeDrawer(true)}
         />
@@ -151,7 +172,7 @@ export default function AdminLayout() {
         ref={drawerRef}
         id="admin-navigation"
         aria-label="Admin navigation"
-        className={`no-print fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-stone-800 bg-stone-950 text-white shadow-2xl transition-transform duration-200 ease-out md:translate-x-0 ${
+        className={`no-print fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-stone-800 bg-stone-950 text-white shadow-2xl transition-transform duration-200 ease-out lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -176,7 +197,7 @@ export default function AdminLayout() {
 
           <button
             type="button"
-            className="grid h-11 w-11 place-items-center rounded-lg text-stone-400 hover:bg-stone-800 hover:text-white md:hidden"
+            className="grid h-11 w-11 place-items-center rounded-lg text-stone-400 hover:bg-stone-800 hover:text-white lg:hidden"
             aria-label="Close admin navigation"
             onClick={() => closeDrawer(true)}
           >
@@ -222,13 +243,13 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      <div className="admin-shell__main min-h-screen md:pl-64">
+      <div className="admin-shell__main min-h-screen lg:pl-64">
         <header className="no-print sticky top-0 z-30 flex h-16 items-center justify-between border-b border-stone-200 bg-white/95 px-4 shadow-sm backdrop-blur sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
               ref={menuButtonRef}
               type="button"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-stone-200 text-stone-700 hover:border-stone-300 hover:bg-stone-100 md:hidden"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-stone-200 text-stone-700 hover:border-stone-300 hover:bg-stone-100 lg:hidden"
               aria-label="Open admin navigation"
               aria-controls="admin-navigation"
               aria-expanded={mobileOpen}
@@ -237,8 +258,23 @@ export default function AdminLayout() {
               <Menu className="h-5 w-5" aria-hidden="true" />
             </button>
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-stone-400">Swamy Slabs</p>
-              <p className="truncate text-sm font-black text-stone-900 sm:text-base">{sectionLabel}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-stone-500">Swamy Slabs</p>
+              <nav className="flex min-w-0 items-center gap-1 text-sm font-semibold text-stone-700" aria-label="Breadcrumb">
+                <Link to="/admin/dashboard" className="shrink-0 text-stone-500 no-underline hover:text-stone-950">Admin</Link>
+                {breadcrumbs.map((crumb, index) => {
+                  const current = index === breadcrumbs.length - 1;
+                  return (
+                    <span key={`${crumb.label}-${index}`} className="flex min-w-0 items-center gap-1">
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-stone-300" aria-hidden="true" />
+                      {crumb.to && !current ? (
+                        <Link to={crumb.to} className="truncate text-stone-500 no-underline hover:text-stone-950">{crumb.label}</Link>
+                      ) : (
+                        <span className="truncate font-bold text-stone-900" aria-current={current ? 'page' : undefined}>{crumb.label}</span>
+                      )}
+                    </span>
+                  );
+                })}
+              </nav>
             </div>
           </div>
 
@@ -255,7 +291,7 @@ export default function AdminLayout() {
             <button
               type="button"
               onClick={handleLogout}
-              className="hidden min-h-11 items-center gap-2 rounded-xl px-3 text-xs font-bold text-stone-600 hover:bg-rose-50 hover:text-rose-700 md:flex"
+              className="hidden min-h-11 items-center gap-2 rounded-xl px-3 text-xs font-bold text-stone-600 hover:bg-rose-50 hover:text-rose-700 lg:flex"
             >
               <LogOut className="h-4 w-4" aria-hidden="true" />
               <span>Sign out</span>
