@@ -21,9 +21,13 @@ import {
 import { useAdmin } from '../../context/AdminContext';
 import { getAllStones } from '../../lib/catalog';
 import {
+  batchAvailableToPromiseArea,
+  batchAvailableToPromiseQuantity,
   batchAreaOnHand,
   batchInventoryMode,
   batchQuantityOnHand,
+  batchReservedArea,
+  batchReservedQuantity,
   batchStone,
   formatInventoryCurrency,
   formatInventoryDate,
@@ -37,6 +41,13 @@ import {
 
 const PAGE_SIZE = 20;
 const EMPTY_FILTERS = Object.freeze({ search: '', stone: '', finish: '', status: '', warehouse: '' });
+
+function quantityAreaLabel(quantity, area, quantityLabel = 'units') {
+  const values = [];
+  if (quantity != null) values.push(`${formatInventoryNumber(quantity, { maximumFractionDigits: 0 })} ${quantityLabel}`);
+  if (area != null) values.push(`${formatInventoryNumber(area)} sq.ft`);
+  return values.length ? values.join(' / ') : 'Not recorded';
+}
 
 function MetricCard({ label, value, detail, icon }) {
   const Icon = icon;
@@ -147,6 +158,7 @@ export default function InventoryPage() {
   };
 
   const costValues = Array.isArray(metrics?.inventoryCostValues) ? metrics.inventoryCostValues : [];
+  const stockBalances = metrics?.stockBalances || {};
   const activeFilters = Object.values(filters).filter(Boolean).length;
 
   return (
@@ -188,9 +200,9 @@ export default function InventoryPage() {
             <MetricCard label="Available batches" value={formatInventoryNumber(metrics?.availableBatches, { maximumFractionDigits: 0 })} icon={PackageCheck} />
             <MetricCard label="In processing" value={formatInventoryNumber(metrics?.inProcessingBatches, { maximumFractionDigits: 0 })} detail={`${formatInventoryNumber(metrics?.inProcessingSlabs, { maximumFractionDigits: 0 })} individual slabs in production.`} icon={Factory} />
             <MetricCard
-              label="Recorded available area"
+              label="Physical on-hand area"
               value={metrics?.totalAvailableSqFt == null ? 'Not recorded' : `${formatInventoryNumber(metrics.totalAvailableSqFt)} sq.ft`}
-              detail={metrics?.availableAreaTrackedBatches > 0 ? `${metrics.availableAreaTrackedBatches} available batch${metrics.availableAreaTrackedBatches === 1 ? '' : 'es'} with recorded area.` : 'Missing batch area is not inferred.'}
+              detail={metrics?.availableAreaTrackedBatches > 0 ? `${metrics.availableAreaTrackedBatches} available batch${metrics.availableAreaTrackedBatches === 1 ? '' : 'es'} with recorded area. Reservations are shown separately.` : 'Missing batch area is not inferred.'}
               icon={Layers3}
             />
             <MetricCard label="Individual slabs" value={formatInventoryNumber(metrics?.individualSlabs, { maximumFractionDigits: 0 })} icon={SquareStack} />
@@ -205,6 +217,27 @@ export default function InventoryPage() {
               value={costValues.length ? costValues.map((item) => formatInventoryCurrency(item.amount, item.currency)).join(' · ') : 'Not available'}
               detail={costValues.length ? costValues.map((item) => `${item.batches || 0} batch${Number(item.batches) === 1 ? '' : 'es'} in ${item.currency}`).join(' · ') : 'Shown only where verified cost exists.'}
               icon={CircleDollarSign}
+            />
+          </section>
+
+          <section aria-label="Inventory commitment balances" className="grid gap-3 sm:grid-cols-3">
+            <MetricCard
+              label="Physical on hand"
+              value={quantityAreaLabel(stockBalances.onHand?.quantity, stockBalances.onHand?.areaSqFt, 'recorded count')}
+              detail="Physical stock before Sales Order reservations."
+              icon={Layers3}
+            />
+            <MetricCard
+              label="Reserved commitments"
+              value={quantityAreaLabel(stockBalances.reserved?.quantity, stockBalances.reserved?.areaSqFt, 'recorded count')}
+              detail="Committed to active Sales Order reservations; no physical issue has occurred."
+              icon={Warehouse}
+            />
+            <MetricCard
+              label="Available to promise"
+              value={quantityAreaLabel(stockBalances.availableToPromise?.quantity, stockBalances.availableToPromise?.areaSqFt, 'recorded count')}
+              detail="Physical on hand less active reservations."
+              icon={PackageCheck}
             />
           </section>
 
@@ -258,15 +291,16 @@ export default function InventoryPage() {
               <>
                 <div className="hidden overflow-x-auto lg:block">
                   <table className="w-full border-collapse text-left">
-                    <thead className="bg-stone-50 text-[10px] font-black uppercase tracking-[0.1em] text-stone-500"><tr><th className="px-5 py-3">Batch / Stone</th><th className="px-4 py-3">Specification</th><th className="px-4 py-3">On hand</th><th className="px-4 py-3">Location</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Updated</th><th className="px-5 py-3 text-right">Action</th></tr></thead>
+                    <thead className="bg-stone-50 text-[10px] font-black uppercase tracking-[0.1em] text-stone-500"><tr><th className="px-5 py-3">Batch / Stone</th><th className="px-4 py-3">Specification</th><th className="px-4 py-3">Stock balance</th><th className="px-4 py-3">Location</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Updated</th><th className="px-5 py-3 text-right">Action</th></tr></thead>
                     <tbody className="divide-y divide-stone-100">
                       {batches.map((batch) => {
                         const stone = batchStone(batch);
+                        const quantityLabel = batchInventoryMode(batch) === 'INDIVIDUAL_SLAB' ? 'slabs' : 'units';
                         return (
                           <tr key={batch._id} className="hover:bg-stone-50/70">
                             <td className="px-5 py-4"><Link to={`/admin/inventory/batches/${batch._id}`} className="font-mono text-xs font-black text-amber-800 hover:underline">{batch.batchNumber}</Link><p className="mt-1 max-w-xs truncate text-sm font-bold text-stone-900">{stone.name || 'Stone not recorded'}</p></td>
                             <td className="px-4 py-4 text-xs text-stone-600"><p>{batch.finish || 'Finish not recorded'}</p><p className="mt-1 text-stone-400">{batch.thicknessMm != null ? `${formatInventoryNumber(batch.thicknessMm)} mm` : 'Thickness not recorded'}</p></td>
-                            <td className="px-4 py-4 text-xs text-stone-700"><p className="font-black tabular-nums">{formatInventoryNumber(batchQuantityOnHand(batch), { maximumFractionDigits: 0 })} {batchInventoryMode(batch) === 'INDIVIDUAL_SLAB' ? 'slabs' : 'units'}</p><p className="mt-1 text-stone-500">{batchAreaOnHand(batch) == null ? 'Area not recorded' : `${formatInventoryNumber(batchAreaOnHand(batch))} sq.ft`}</p></td>
+                            <td className="px-4 py-4 text-xs text-stone-700"><p className="font-black tabular-nums">Physical: {quantityAreaLabel(batchQuantityOnHand(batch), batchAreaOnHand(batch), quantityLabel)}</p><p className="mt-1 text-amber-800">Reserved: {quantityAreaLabel(batchReservedQuantity(batch), batchReservedArea(batch), quantityLabel)}</p><p className="mt-1 text-emerald-700">ATP: {quantityAreaLabel(batchAvailableToPromiseQuantity(batch), batchAvailableToPromiseArea(batch), quantityLabel)}</p></td>
                             <td className="px-4 py-4 text-xs text-stone-600"><span className="inline-flex max-w-48 items-start gap-1.5"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-stone-400" aria-hidden="true" /><span>{batchInventoryMode(batch) === 'INDIVIDUAL_SLAB' ? 'Tracked per slab' : formatInventoryLocation(batch.location)}</span></span></td>
                             <td className="px-4 py-4"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${INVENTORY_STATUS_STYLES[batch.status] || INVENTORY_STATUS_STYLES.DRAFT}`}>{labelInventoryStatus(batch.status)}</span></td>
                             <td className="px-4 py-4 text-xs text-stone-500">{formatInventoryDate(batch.updatedAt)}</td>
@@ -280,10 +314,11 @@ export default function InventoryPage() {
                 <div className="divide-y divide-stone-100 lg:hidden">
                   {batches.map((batch) => {
                     const stone = batchStone(batch);
+                    const quantityLabel = batchInventoryMode(batch) === 'INDIVIDUAL_SLAB' ? 'slabs' : 'units';
                     return (
                       <Link key={batch._id} to={`/admin/inventory/batches/${batch._id}`} className="block p-4 no-underline hover:bg-stone-50">
                         <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-mono text-xs font-black text-amber-800">{batch.batchNumber}</p><h3 className="mt-1 truncate text-sm font-black text-stone-950">{stone.name || 'Stone not recorded'}</h3></div><span className={`shrink-0 rounded-full border px-2 py-1 text-[9px] font-black uppercase ${INVENTORY_STATUS_STYLES[batch.status] || INVENTORY_STATUS_STYLES.DRAFT}`}>{labelInventoryStatus(batch.status)}</span></div>
-                        <div className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><p className="text-stone-400">On hand</p><p className="mt-1 font-bold text-stone-700">{formatInventoryNumber(batchQuantityOnHand(batch), { maximumFractionDigits: 0 })} / {batchAreaOnHand(batch) == null ? 'No area' : `${formatInventoryNumber(batchAreaOnHand(batch))} sq.ft`}</p></div><div><p className="text-stone-400">Location</p><p className="mt-1 font-bold text-stone-700">{batchInventoryMode(batch) === 'INDIVIDUAL_SLAB' ? 'Tracked per slab' : formatInventoryLocation(batch.location)}</p></div></div>
+                        <div className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><p className="text-stone-400">Physical on hand</p><p className="mt-1 font-bold text-stone-700">{quantityAreaLabel(batchQuantityOnHand(batch), batchAreaOnHand(batch), quantityLabel)}</p></div><div><p className="text-stone-400">Available to promise</p><p className="mt-1 font-bold text-emerald-700">{quantityAreaLabel(batchAvailableToPromiseQuantity(batch), batchAvailableToPromiseArea(batch), quantityLabel)}</p></div><div><p className="text-stone-400">Reserved</p><p className="mt-1 font-bold text-amber-800">{quantityAreaLabel(batchReservedQuantity(batch), batchReservedArea(batch), quantityLabel)}</p></div><div><p className="text-stone-400">Location</p><p className="mt-1 font-bold text-stone-700">{batchInventoryMode(batch) === 'INDIVIDUAL_SLAB' ? 'Tracked per slab' : formatInventoryLocation(batch.location)}</p></div></div>
                       </Link>
                     );
                   })}

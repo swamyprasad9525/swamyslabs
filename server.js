@@ -10,6 +10,8 @@ import crmRouter from './src-server/routes/crm.js';
 import inventoryRouter from './src-server/routes/inventory.js';
 import publicInventoryRouter from './src-server/routes/publicInventory.js';
 import processingRouter from './src-server/routes/processing.js';
+import quotationsRouter from './src-server/routes/quotations.js';
+import salesOrdersRouter from './src-server/routes/salesOrders.js';
 import { validateEnvironment, getAllowedOrigins } from './src-server/config/env.js';
 import { connectDB, databaseStatus } from './src-server/config/database.js';
 import { submitCallbackLead, submitEnquiryLead } from './src-server/controllers/publicLeadController.js';
@@ -88,6 +90,8 @@ app.use('/api/admin', adminRouter);
 app.use('/api/admin', crmRouter);
 app.use('/api/admin', inventoryRouter);
 app.use('/api/admin', processingRouter);
+app.use('/api/admin', quotationsRouter);
+app.use('/api/admin', salesOrdersRouter);
 
 app.use((err, req, res, _next) => {
   if (err instanceof multer.MulterError) {

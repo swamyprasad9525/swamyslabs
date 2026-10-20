@@ -6,6 +6,7 @@ import {
   Building2,
   CheckCircle2,
   ExternalLink,
+  FileCheck2,
   MapPin,
   RefreshCw,
   Save,
@@ -220,9 +221,14 @@ export default function CustomerDetailPage() {
             </div>
             <p className="mt-1 text-sm text-stone-500">Customer since {formatCrmDate(customer.createdAt)}</p>
           </div>
-          <button type="button" onClick={fetchCustomer} disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-bold text-stone-700 shadow-sm hover:bg-stone-50 disabled:opacity-60">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Reset from server
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={fetchCustomer} disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-bold text-stone-700 shadow-sm hover:bg-stone-50 disabled:opacity-60">
+              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Reset from server
+            </button>
+            <Link to={`/admin/quotations/new?customerId=${encodeURIComponent(customer._id)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-stone-950 px-4 text-sm font-black text-white no-underline hover:bg-stone-800">
+              <FileCheck2 className="h-4 w-4" aria-hidden="true" /> New quotation
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -354,7 +360,7 @@ export default function CustomerDetailPage() {
           </section>
 
           <section className="rounded-2xl border border-stone-200 bg-stone-50 p-5 text-xs leading-5 text-stone-500">
-            This customer record is not automatically linked to historical invoices, quotations, orders, inventory, payments, or dispatch records.
+            Historical records are not backfilled automatically. New quotations and Sales Orders retain explicit customer links; invoices, inventory, payments, and dispatch remain separate workflows.
           </section>
         </aside>
       </div>

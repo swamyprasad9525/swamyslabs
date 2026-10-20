@@ -116,6 +116,12 @@ const currentOperationSchema = new Schema({
   sequence: { type: Number, required: true, min: 1 },
 }, { _id: false });
 
+const sourceSalesOrderSchema = new Schema({
+  salesOrderId: { type: Schema.Types.ObjectId, ref: 'SalesOrder', required: true },
+  salesOrderLineItemId: { type: Schema.Types.ObjectId, required: true },
+  salesOrderNumber: { type: String, trim: true, maxlength: 80 },
+}, { _id: false });
+
 const processingJobSchema = new Schema({
   jobNumber: {
     type: String,
@@ -131,6 +137,7 @@ const processingJobSchema = new Schema({
     default: 'DRAFT',
     index: true,
   },
+  sourceSalesOrder: { type: sourceSalesOrderSchema, default: undefined },
   stoneSnapshot: { type: stoneSnapshotSchema, required: true, immutable: true },
   inventoryMode: { type: String, enum: INVENTORY_MODES, required: true, immutable: true },
   input: { type: inputSchema, required: true },
@@ -193,6 +200,8 @@ processingJobSchema.index({ 'input.batchId': 1, createdAt: -1 });
 processingJobSchema.index({ 'input.slabIds': 1, status: 1 });
 processingJobSchema.index({ 'stoneSnapshot.slug': 1, updatedAt: -1 });
 processingJobSchema.index({ 'currentOperation.operation': 1, status: 1 });
+processingJobSchema.index({ 'sourceSalesOrder.salesOrderId': 1, createdAt: -1 });
+processingJobSchema.index({ 'sourceSalesOrder.salesOrderLineItemId': 1, status: 1 });
 
 const ProcessingJob = mongoose.models.ProcessingJob
   || mongoose.model('ProcessingJob', processingJobSchema);

@@ -260,6 +260,18 @@ function normalizeTarget(input) {
   return Object.keys(target).length ? target : undefined;
 }
 
+function normalizeSourceSalesOrder(input) {
+  if (input === undefined || input === null) return undefined;
+  if (typeof input !== 'object' || Array.isArray(input)) {
+    throw new ProcessingError('Sales Order source must be an object.');
+  }
+  return compact({
+    salesOrderId: requireObjectId(input.salesOrderId, 'Sales Order ID'),
+    salesOrderLineItemId: requireObjectId(input.salesOrderLineItemId, 'Sales Order line item ID'),
+    salesOrderNumber: optionalText(input.salesOrderNumber, 'Sales Order number', 80),
+  });
+}
+
 function normalizeRouting(input, { required = false } = {}) {
   if (input === undefined || input === null) {
     if (required) throw new ProcessingError('At least one processing operation is required.');
@@ -375,6 +387,14 @@ async function loadAvailableSource({ inventoryMode, input, models, session }) {
   const slabIds = normalizeSlabIds(input.slabIds);
   if (inventoryMode === 'BATCH') {
     if (slabIds.length) throw new ProcessingError('Batch-mode processing cannot select individual slabs.');
+    if (Number(batch.reservationBalance?.quantity || 0) > 0
+      || Number(batch.reservationBalance?.areaSqFt || 0) > 0) {
+      throw new ProcessingError(
+        'Reserved batch inventory must be released before processing can be planned or started.',
+        409,
+        'INVENTORY_RESERVED',
+      );
+    }
     if (Number(batch.quantity?.currentCount || 0) <= 0 && Number(batch.area?.availableSqFt || 0) <= 0) {
       throw new ProcessingError('The selected batch has no available material.', 409, 'INVENTORY_UNAVAILABLE');
     }
@@ -387,6 +407,7 @@ async function loadAvailableSource({ inventoryMode, input, models, session }) {
     batch: batch._id,
     status: 'AVAILABLE',
     activeProcessingJob: null,
+    $or: [{ reservation: { $exists: false } }, { reservation: null }],
   }, session, { slabNumber: 1, _id: 1 });
   if (!Array.isArray(slabs) || slabs.length !== slabIds.length) {
     throw new ProcessingError(
@@ -468,6 +489,7 @@ export async function createProcessingJob({
     'Expected completion date',
   );
   const notes = optionalText(input.notes, 'Production notes', 3000);
+  const sourceSalesOrder = normalizeSourceSalesOrder(input.sourceSalesOrder);
   const models = resolveModels(modelOverrides);
 
   return runRequiredTransaction({ models, connection, session, work: async (activeSession) => {
@@ -486,6 +508,7 @@ export async function createProcessingJob({
     const job = await createDocument(models.ProcessingJobModel, {
       jobNumber,
       status: 'DRAFT',
+      sourceSalesOrder,
       stoneSnapshot: stoneSnapshot(source.batch),
       inventoryMode,
       input: compact({
@@ -1253,6 +1276,56 @@ export async function listProcessingEvents({
     pages: Math.max(1, Math.ceil(total / pagination.limit)),
     limit: pagination.limit,
   };
+}
+
+export async function linkProcessingJobToSalesOrder({
+  jobId,
+  sourceSalesOrder,
+  actor,
+  now = new Date(),
+  models: modelOverrides,
+  connection,
+  session = null,
+}) {
+  const authenticatedActor = requireActor(actor);
+  const normalizedSource = normalizeSourceSalesOrder(sourceSalesOrder);
+  const models = resolveModels(modelOverrides);
+  return runRequiredTransaction({ models, connection, session, work: async (activeSession) => {
+    const job = await requireJob(jobId, models, activeSession);
+    if (!['DRAFT', 'PLANNED'].includes(job.status)) {
+      throw new ProcessingError(
+        'Only a draft or planned processing job can be linked to a Sales Order.',
+        409,
+        'INVALID_JOB_STATE',
+      );
+    }
+    if (job.sourceSalesOrder) {
+      const sameLink = String(job.sourceSalesOrder.salesOrderId) === String(normalizedSource.salesOrderId)
+        && String(job.sourceSalesOrder.salesOrderLineItemId) === String(normalizedSource.salesOrderLineItemId);
+      if (!sameLink) {
+        throw new ProcessingError(
+          'This processing job is already linked to another Sales Order line.',
+          409,
+          'PROCESSING_LINK_CONFLICT',
+        );
+      }
+      return { job, event: null, idempotent: true };
+    }
+
+    job.sourceSalesOrder = normalizedSource;
+    job.updatedBy = authenticatedActor;
+    await saveDocument(job, activeSession);
+    const event = await createEvent(models, {
+      job,
+      type: 'NOTE',
+      actor: authenticatedActor,
+      now,
+      note: normalizedSource.salesOrderNumber
+        ? `Linked to Sales Order ${normalizedSource.salesOrderNumber}.`
+        : 'Linked to a Sales Order line.',
+    }, activeSession);
+    return { job, event, idempotent: false };
+  } });
 }
 
 export async function listProcessingMovements({

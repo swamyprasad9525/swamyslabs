@@ -20,6 +20,7 @@ import {
   createProcessingJob,
   formatProcessingJobReference,
   getProcessingSummary,
+  linkProcessingJobToSalesOrder,
   listProcessingEvents,
   listProcessingJobs,
   planProcessingJob,
@@ -42,6 +43,8 @@ const SLAB_TWO = '507f191e810c19729de860e2';
 const OP_ONE = '507f191e810c19729de86101';
 const OP_TWO = '507f191e810c19729de86102';
 const ACTOR = 'authenticated-admin';
+const SALES_ORDER_ID = '507f1f77bcf86cd799439031';
+const SALES_ORDER_LINE_ID = '507f1f77bcf86cd799439032';
 const NOW = new Date('2026-10-09T10:00:00.000Z');
 const SESSION = { id: 'test-session', inTransaction: () => true };
 
@@ -349,6 +352,37 @@ describe('job creation and planning', () => {
     expect(result.job.target.finish).toBe('Polished');
     expect(result.event.type).toBe('NOTE');
   });
+
+  it('links a pre-production job to one verified Sales Order line idempotently', async () => {
+    const job = jobDocument();
+    const models = createModels({ job });
+    const sourceSalesOrder = {
+      salesOrderId: SALES_ORDER_ID,
+      salesOrderLineItemId: SALES_ORDER_LINE_ID,
+      salesOrderNumber: 'SO-2026-0001',
+    };
+    const linked = await linkProcessingJobToSalesOrder({
+      jobId: JOB_ID,
+      sourceSalesOrder,
+      actor: ACTOR,
+      now: NOW,
+      models,
+      session: SESSION,
+    });
+    expect(linked.idempotent).toBe(false);
+    expect(job.sourceSalesOrder).toEqual(sourceSalesOrder);
+    expect(linked.event).toMatchObject({ type: 'NOTE', note: 'Linked to Sales Order SO-2026-0001.' });
+
+    const repeated = await linkProcessingJobToSalesOrder({
+      jobId: JOB_ID,
+      sourceSalesOrder,
+      actor: ACTOR,
+      now: NOW,
+      models,
+      session: SESSION,
+    });
+    expect(repeated).toMatchObject({ event: null, idempotent: true });
+  });
 });
 
 describe('inventory issue and operation sequencing', () => {
@@ -405,6 +439,21 @@ describe('inventory issue and operation sequencing', () => {
     })).rejects.toMatchObject({ status: 409 });
   });
 
+  it('rejects reserved batch stock before creating a physical processing issue', async () => {
+    const reserved = batchDocument({ reservationBalance: { quantity: 0, areaSqFt: 20 } });
+    const models = createModels({ batch: reserved });
+    await expect(issueInventoryToProcessing({
+      processingJobId: JOB_ID,
+      jobNumber: 'PJ-2026-0001',
+      batchId: BATCH_ID,
+      actor: ACTOR,
+      models,
+      session: SESSION,
+    })).rejects.toMatchObject({ status: 409, code: 'INVENTORY_RESERVED' });
+    expect(models.InventoryBatchModel.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(models.InventoryMovementModel.create).not.toHaveBeenCalled();
+  });
+
   it('issues only explicitly selected individual slabs', async () => {
     const slabs = [slabDocument(SLAB_ONE, 'SLB-2026-0001'), slabDocument(SLAB_TWO, 'SLB-2026-0002')];
     const batch = batchDocument({
@@ -426,6 +475,9 @@ describe('inventory issue and operation sequencing', () => {
     expect(result.inputSnapshot.areaSqFt).toBe(20);
     expect(result.movements).toHaveLength(2);
     expect(result.movements.every((movement) => movement.type === 'PROCESSING_ISSUE')).toBe(true);
+    expect(models.SlabModel.find).toHaveBeenCalledWith(expect.objectContaining({
+      $or: [{ reservation: { $exists: false } }, { reservation: null }],
+    }));
   });
 
   it('requires one transaction session for inventory issue helpers', async () => {

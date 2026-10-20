@@ -118,6 +118,45 @@ export function batchAreaReceived(batch) {
   return batch?.area?.receivedSqFt ?? batch?.areaReceivedSqFt ?? batch?.receivedSqFt;
 }
 
+export function batchInventoryAvailability(batch) {
+  const persisted = batch?.inventoryAvailability || batch?.availability;
+  if (persisted?.onHand && persisted?.reserved && persisted?.availableToPromise) return persisted;
+
+  const onHandQuantity = Number(batchQuantityOnHand(batch) || 0);
+  const onHandAreaValue = batchAreaOnHand(batch);
+  const onHandArea = onHandAreaValue == null ? null : Number(onHandAreaValue);
+  const reservedQuantity = Number(batch?.reservationBalance?.quantity || 0);
+  const reservedArea = Number(batch?.reservationBalance?.areaSqFt || 0);
+  const areaAuthoritative = batchInventoryMode(batch) === 'BATCH' && onHandArea != null;
+
+  return {
+    basis: areaAuthoritative ? 'AREA' : 'QUANTITY',
+    onHand: { quantity: onHandQuantity, areaSqFt: onHandArea },
+    reserved: { quantity: reservedQuantity, areaSqFt: reservedArea },
+    availableToPromise: {
+      quantity: areaAuthoritative ? null : Math.max(0, onHandQuantity - reservedQuantity),
+      areaSqFt: onHandArea == null ? null : Math.max(0, onHandArea - reservedArea),
+    },
+    reservationState: reservedQuantity > 0 || reservedArea > 0 ? 'PARTIAL' : 'NONE',
+  };
+}
+
+export function batchReservedQuantity(batch) {
+  return batchInventoryAvailability(batch).reserved?.quantity;
+}
+
+export function batchReservedArea(batch) {
+  return batchInventoryAvailability(batch).reserved?.areaSqFt;
+}
+
+export function batchAvailableToPromiseQuantity(batch) {
+  return batchInventoryAvailability(batch).availableToPromise?.quantity;
+}
+
+export function batchAvailableToPromiseArea(batch) {
+  return batchInventoryAvailability(batch).availableToPromise?.areaSqFt;
+}
+
 export function batchCost(batch) {
   const source = batch?.cost || batch?.valuation || {};
   return {

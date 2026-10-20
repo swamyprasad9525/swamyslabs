@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ClipboardList,
   ExternalLink,
+  FileCheck2,
   FileText,
   Mail,
   MapPin,
@@ -591,6 +592,11 @@ export default function LeadDetailPage() {
                   <Link to={`/admin/customers/${customerId}`} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-black text-stone-950 hover:bg-amber-300">
                     View customer <ExternalLink className="h-4 w-4" aria-hidden="true" />
                   </Link>
+                  {lead.stage === 'READY_FOR_QUOTATION' && (
+                    <Link to={`/admin/quotations/new?leadId=${encodeURIComponent(lead._id)}`} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-black text-white no-underline hover:bg-stone-800">
+                      Create quotation draft <FileCheck2 className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  )}
                 </div>
               ) : canConvert ? (
                 <div className="space-y-3">

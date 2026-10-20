@@ -9,13 +9,16 @@ import {
   CheckCircle2,
   CircleDollarSign,
   ClipboardCheck,
+  ClipboardList,
   Clock3,
   Factory,
+  FileCheck2,
   FileText,
   History,
   PackageCheck,
   PackageOpen,
   RefreshCw,
+  ShoppingCart,
   Sparkles,
   SquareStack,
   UserRoundCheck,
@@ -61,6 +64,17 @@ import {
   parseProcessingResponse,
   PROCESSING_STATUS_STYLES,
 } from '../../lib/processing';
+import {
+  customerSnapshotName,
+  formatCommercialDate,
+  labelQuotationStatus,
+  labelSalesOrderStatus,
+  parseCommercialResponse,
+  quotationCustomer,
+  salesOrderCustomer,
+  QUOTATION_STATUS_STYLES,
+  SALES_ORDER_STATUS_STYLES,
+} from '../../lib/commercial';
 
 const COMMERCIAL_METRICS = [
   { key: 'NEW', label: 'New leads', icon: Sparkles, tone: 'blue' },
@@ -177,6 +191,24 @@ function ProcessingJobRow({ job }) {
   );
 }
 
+function QuotationRow({ quotation }) {
+  return (
+    <Link to={`/admin/quotations/${quotation._id}`} className="group flex min-h-16 items-center justify-between gap-3 border-b border-stone-100 px-4 py-3 text-left no-underline last:border-b-0 hover:bg-stone-50 sm:px-5">
+      <span className="min-w-0"><span className="block font-mono text-xs font-bold text-amber-800">{quotation.quotationNumber || 'Draft quotation'}</span><span className="mt-0.5 block truncate text-sm font-bold text-stone-900">{customerSnapshotName(quotationCustomer(quotation))}</span><span className="mt-1 block text-xs text-stone-500">Revision {quotation.revision ?? 1} · {formatCommercialDate(quotation.updatedAt)}</span></span>
+      <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${QUOTATION_STATUS_STYLES[quotation.status] || QUOTATION_STATUS_STYLES.DRAFT}`}>{labelQuotationStatus(quotation.status)}</span>
+    </Link>
+  );
+}
+
+function SalesOrderRow({ order }) {
+  return (
+    <Link to={`/admin/sales-orders/${order._id}`} className="group flex min-h-16 items-center justify-between gap-3 border-b border-stone-100 px-4 py-3 text-left no-underline last:border-b-0 hover:bg-stone-50 sm:px-5">
+      <span className="min-w-0"><span className="block font-mono text-xs font-bold text-amber-800">{order.salesOrderNumber}</span><span className="mt-0.5 block truncate text-sm font-bold text-stone-900">{customerSnapshotName(salesOrderCustomer(order))}</span><span className="mt-1 block text-xs text-stone-500">{order.quotationNumber || 'Quotation'} · {formatCommercialDate(order.updatedAt)}</span></span>
+      <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${SALES_ORDER_STATUS_STYLES[order.status] || SALES_ORDER_STATUS_STYLES.CONFIRMED}`}>{labelSalesOrderStatus(order.status)}</span>
+    </Link>
+  );
+}
+
 export default function AdminDashboardPage() {
   const { authFetch, logout } = useAdmin();
   const navigate = useNavigate();
@@ -192,6 +224,11 @@ export default function AdminDashboardPage() {
   const [recentProcessingJobs, setRecentProcessingJobs] = useState([]);
   const [processingLoading, setProcessingLoading] = useState(true);
   const [processingError, setProcessingError] = useState('');
+  const [salesSummary, setSalesSummary] = useState(null);
+  const [recentQuotations, setRecentQuotations] = useState([]);
+  const [recentSalesOrders, setRecentSalesOrders] = useState([]);
+  const [salesLoading, setSalesLoading] = useState(true);
+  const [salesError, setSalesError] = useState('');
 
   const expireSession = useCallback(() => {
     logout();
@@ -273,18 +310,49 @@ export default function AdminDashboardPage() {
     }
   }, [authFetch, expireSession]);
 
+  const loadSales = useCallback(async () => {
+    setSalesLoading(true);
+    setSalesError('');
+    try {
+      const [quotationSummaryResponse, quotationListResponse, orderSummaryResponse, orderListResponse] = await Promise.all([
+        authFetch('/api/admin/quotations/summary'),
+        authFetch('/api/admin/quotations?page=1&limit=5'),
+        authFetch('/api/admin/sales-orders/summary'),
+        authFetch('/api/admin/sales-orders?page=1&limit=5'),
+      ]);
+      const responses = [quotationSummaryResponse, quotationListResponse, orderSummaryResponse, orderListResponse];
+      if (responses.some((response) => response.status === 401)) { expireSession(); return; }
+      const [quotationSummaryData, quotationListData, orderSummaryData, orderListData] = await Promise.all([
+        parseCommercialResponse(quotationSummaryResponse, 'Unable to load quotation summary.'),
+        parseCommercialResponse(quotationListResponse, 'Unable to load recent quotations.'),
+        parseCommercialResponse(orderSummaryResponse, 'Unable to load sales order summary.'),
+        parseCommercialResponse(orderListResponse, 'Unable to load recent sales orders.'),
+      ]);
+      setSalesSummary({ quotations: quotationSummaryData.summary || {}, orders: orderSummaryData.summary || {} });
+      setRecentQuotations(Array.isArray(quotationListData.quotations) ? quotationListData.quotations : []);
+      setRecentSalesOrders(Array.isArray(orderListData.salesOrders) ? orderListData.salesOrders : []);
+    } catch (requestError) {
+      setSalesError(requestError.message || 'Unable to load sales commitment data.');
+    } finally {
+      setSalesLoading(false);
+    }
+  }, [authFetch, expireSession]);
+
   useEffect(() => {
     loadCrm();
     loadInventory();
     loadProcessing();
-  }, [loadCrm, loadInventory, loadProcessing]);
+    loadSales();
+  }, [loadCrm, loadInventory, loadProcessing, loadSales]);
 
   const stageCounts = useMemo(() => normalizeCountMap(crmDashboard?.byStage), [crmDashboard?.byStage]);
   const recentLeads = Array.isArray(crmDashboard?.recentLeads) ? crmDashboard.recentLeads : [];
+  const quotationCounts = useMemo(() => normalizeCountMap(salesSummary?.quotations?.byStatus || salesSummary?.quotations), [salesSummary?.quotations]);
+  const salesOrderCounts = useMemo(() => normalizeCountMap(salesSummary?.orders?.byStatus || salesSummary?.orders), [salesSummary?.orders]);
   const costValues = Array.isArray(inventorySummary?.inventoryCostValues)
     ? inventorySummary.inventoryCostValues.filter((item) => item?.currency && Number.isFinite(Number(item.amount)))
     : [];
-  const refreshing = crmLoading || inventoryLoading || processingLoading;
+  const refreshing = crmLoading || inventoryLoading || processingLoading || salesLoading;
 
   return (
     <AdminPage className="space-y-8">
@@ -296,7 +364,7 @@ export default function AdminDashboardPage() {
           <>
             <button
               type="button"
-              onClick={() => { loadCrm(); loadInventory(); loadProcessing(); }}
+              onClick={() => { loadCrm(); loadInventory(); loadProcessing(); loadSales(); }}
               disabled={refreshing}
               className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 text-xs font-bold text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -362,6 +430,22 @@ export default function AdminDashboardPage() {
             </AdminPanel>
           </div>
         )}
+      </section>
+
+      <section className="space-y-4" aria-labelledby="sales-commitments-heading" aria-busy={salesLoading}>
+        <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="sales-commitments-heading" className="text-lg font-bold text-stone-950">Sales commitments</h2><p className="mt-0.5 text-xs leading-5 text-stone-500">Persisted quotation and sales-order states. No revenue, payment, or delivery result is inferred.</p></div><div className="flex gap-3"><AdminTextLink to="/admin/quotations">Quotations</AdminTextLink><AdminTextLink to="/admin/sales-orders">Sales orders</AdminTextLink></div></div>
+        {salesError && <AdminFeedback title={salesSummary ? 'Sales commitments refresh failed' : 'Sales commitments unavailable'} onRetry={loadSales}>{salesSummary ? `Showing the last loaded records. ${salesError}` : salesError}</AdminFeedback>}
+        {salesLoading && !salesSummary ? <><MetricsSkeleton count={6} /><div className="grid gap-5 xl:grid-cols-2"><AdminPanel title="Recent quotations" icon={FileCheck2}><AdminLoadingState label="Loading quotations" compact /></AdminPanel><AdminPanel title="Recent sales orders" icon={ShoppingCart}><AdminLoadingState label="Loading sales orders" compact /></AdminPanel></div></> : salesSummary ? <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <AdminMetricCard label="Draft quotations" value={integer(quotationCounts.DRAFT ?? salesSummary.quotations?.draftQuotations)} icon={FileCheck2} tone="stone" to="/admin/quotations" />
+            <AdminMetricCard label="Awaiting response" value={integer(quotationCounts.ISSUED ?? salesSummary.quotations?.awaitingResponse)} detail="Issued; delivery is not inferred." icon={Clock3} tone="blue" to="/admin/quotations" />
+            <AdminMetricCard label="Accepted quotations" value={integer(quotationCounts.ACCEPTED ?? salesSummary.quotations?.acceptedQuotations)} icon={CheckCircle2} tone="emerald" to="/admin/quotations" />
+            <AdminMetricCard label="Confirmed orders" value={integer(salesOrderCounts.CONFIRMED ?? salesSummary.orders?.confirmedOrders)} icon={ClipboardList} tone="blue" to="/admin/sales-orders" />
+            <AdminMetricCard label="Awaiting allocation" value={integer(salesSummary.orders?.awaitingAllocation ?? salesSummary.orders?.ordersAwaitingAllocation)} icon={PackageOpen} tone="amber" to="/admin/sales-orders" />
+            <AdminMetricCard label="Allocated orders" value={integer(salesOrderCounts.ALLOCATED ?? salesSummary.orders?.allocatedOrders)} icon={PackageCheck} tone="emerald" to="/admin/sales-orders" />
+          </div>
+          <div className="grid gap-5 xl:grid-cols-2"><AdminPanel title="Recent quotations" description="Latest persisted commercial offers." icon={FileCheck2} action={<AdminTextLink to="/admin/quotations">All quotations</AdminTextLink>}>{recentQuotations.length ? recentQuotations.map((quotation) => <QuotationRow key={quotation._id} quotation={quotation} />) : <AdminEmptyState icon={FileCheck2} title="No quotations yet" description="Saved quotation drafts will appear here." />}</AdminPanel><AdminPanel title="Recent sales orders" description="Accepted commercial commitments and allocation states." icon={ShoppingCart} action={<AdminTextLink to="/admin/sales-orders">All sales orders</AdminTextLink>}>{recentSalesOrders.length ? recentSalesOrders.map((order) => <SalesOrderRow key={order._id} order={order} />) : <AdminEmptyState icon={ShoppingCart} title="No sales orders yet" description="Orders appear only after accepted quotation conversion." />}</AdminPanel></div>
+        </> : null}
       </section>
 
       <section className="space-y-4" aria-labelledby="inventory-overview-heading" aria-busy={inventoryLoading}>

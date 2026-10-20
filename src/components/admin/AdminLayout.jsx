@@ -2,7 +2,9 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BriefcaseBusiness,
   ChevronRight,
+  ClipboardList,
   ExternalLink,
+  FileCheck2,
   FileText,
   Factory,
   LayoutDashboard,
@@ -23,6 +25,8 @@ const NAV_ITEMS = [
   { label: 'Customers', path: '/admin/customers', icon: Users },
   { label: 'Inventory', path: '/admin/inventory', icon: PackageSearch },
   { label: 'Processing', path: '/admin/processing', icon: Factory },
+  { label: 'Quotations', path: '/admin/quotations', icon: FileCheck2 },
+  { label: 'Sales Orders', path: '/admin/sales-orders', icon: ClipboardList },
   { label: 'Invoices', path: '/admin/invoices', icon: FileText },
 ];
 
@@ -32,6 +36,8 @@ const SECTION_LABELS = [
   { prefix: '/admin/customers', label: 'Customers' },
   { prefix: '/admin/inventory', label: 'Inventory' },
   { prefix: '/admin/processing', label: 'Processing' },
+  { prefix: '/admin/quotations', label: 'Quotations' },
+  { prefix: '/admin/sales-orders', label: 'Sales Orders' },
   { prefix: '/admin/invoices', label: 'Invoices' },
 ];
 
@@ -43,6 +49,9 @@ function getAdminBreadcrumbs(pathname) {
   let detailLabel = 'Details';
   if (pathname === '/admin/inventory/batches/new') detailLabel = 'New batch';
   else if (pathname === '/admin/processing/jobs/new') detailLabel = 'New processing job';
+  else if (pathname === '/admin/quotations/new') detailLabel = 'New quotation';
+  else if (section.label === 'Quotations' && pathname.endsWith('/edit')) detailLabel = 'Edit quotation';
+  else if (section.label === 'Quotations' && pathname.endsWith('/print')) detailLabel = 'Quotation document';
   else if (section.label === 'Processing' && pathname.endsWith('/edit')) detailLabel = 'Edit processing job';
   else if (pathname.endsWith('/edit')) detailLabel = 'Edit';
   else if (pathname === '/admin/invoices/new') detailLabel = 'New invoice';
@@ -50,6 +59,8 @@ function getAdminBreadcrumbs(pathname) {
   else if (section.label === 'Customers') detailLabel = 'Customer detail';
   else if (section.label === 'Inventory') detailLabel = 'Batch detail';
   else if (section.label === 'Processing') detailLabel = 'Processing job';
+  else if (section.label === 'Quotations') detailLabel = 'Quotation detail';
+  else if (section.label === 'Sales Orders') detailLabel = 'Sales order detail';
   else if (section.label === 'Invoices') detailLabel = 'Invoice detail';
 
   return [
@@ -217,6 +228,15 @@ export default function AdminLayout() {
           ))}
 
           <div className="my-4 border-t border-stone-800" />
+
+          <Link
+            to="/admin/quotations/new"
+            onClick={() => closeDrawer()}
+            className="flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-bold text-stone-300 no-underline transition-colors hover:bg-stone-800 hover:text-white"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span>New quotation</span>
+          </Link>
 
           <Link
             to="/admin/invoices/new"

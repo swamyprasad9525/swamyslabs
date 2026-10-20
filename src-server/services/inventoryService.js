@@ -14,6 +14,10 @@ import InventoryBatch from '../models/InventoryBatch.js';
 import InventoryMovement from '../models/InventoryMovement.js';
 import Slab from '../models/Slab.js';
 import { escapeRegex } from '../utils/security.js';
+import {
+  hasActiveReservationBalance,
+  inventoryAvailabilitySnapshot,
+} from './reservationService.js';
 
 const INDIA_OFFSET_MS = 330 * 60 * 1000;
 const AREA_PRECISION = 4;
@@ -144,6 +148,41 @@ function availableArea(batch) {
 
 function slabInventoryArea(slab) {
   return Number(slab.usableAreaSqFt ?? slab.grossAreaSqFt);
+}
+
+function batchWithAvailability(batch) {
+  const value = typeof batch?.toObject === 'function' ? batch.toObject() : { ...batch };
+  return { ...value, inventoryAvailability: inventoryAvailabilitySnapshot(value) };
+}
+
+function availableToPromiseExpression() {
+  return {
+    $cond: [
+      { $isNumber: '$area.availableSqFt' },
+      {
+        $gt: [
+          {
+            $subtract: [
+              { $ifNull: ['$area.availableSqFt', 0] },
+              { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+            ],
+          },
+          0,
+        ],
+      },
+      {
+        $gt: [
+          {
+            $subtract: [
+              { $ifNull: ['$quantity.currentCount', 0] },
+              { $ifNull: ['$reservationBalance.quantity', 0] },
+            ],
+          },
+          0,
+        ],
+      },
+    ],
+  };
 }
 
 function ensureKnownEnum(value, allowed, field) {
@@ -536,6 +575,112 @@ export async function getInventorySummary({ models: modelOverrides } = {}) {
                     ],
                   },
                 },
+                totalOnHandQuantity: {
+                  $sum: {
+                    $cond: [
+                      { $in: ['$status', ['AVAILABLE', 'HOLD']] },
+                      { $ifNull: ['$quantity.currentCount', 0] },
+                      0,
+                    ],
+                  },
+                },
+                totalReservedQuantity: {
+                  $sum: {
+                    $cond: [
+                      { $ne: ['$status', 'ARCHIVED'] },
+                      { $ifNull: ['$reservationBalance.quantity', 0] },
+                      0,
+                    ],
+                  },
+                },
+                totalAvailableToPromiseQuantity: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ['$status', 'AVAILABLE'] },
+                      {
+                        $cond: [
+                          {
+                            $gt: [
+                              {
+                                $subtract: [
+                                  { $ifNull: ['$quantity.currentCount', 0] },
+                                  { $ifNull: ['$reservationBalance.quantity', 0] },
+                                ],
+                              },
+                              0,
+                            ],
+                          },
+                          {
+                            $subtract: [
+                              { $ifNull: ['$quantity.currentCount', 0] },
+                              { $ifNull: ['$reservationBalance.quantity', 0] },
+                            ],
+                          },
+                          0,
+                        ],
+                      },
+                      0,
+                    ],
+                  },
+                },
+                totalOnHandSqFt: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          { $in: ['$status', ['AVAILABLE', 'HOLD']] },
+                          { $isNumber: '$area.availableSqFt' },
+                        ],
+                      },
+                      { $ifNull: ['$area.availableSqFt', 0] },
+                      0,
+                    ],
+                  },
+                },
+                totalReservedSqFt: {
+                  $sum: {
+                    $cond: [
+                      { $ne: ['$status', 'ARCHIVED'] },
+                      { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+                      0,
+                    ],
+                  },
+                },
+                totalAvailableToPromiseSqFt: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          { $eq: ['$status', 'AVAILABLE'] },
+                          { $isNumber: '$area.availableSqFt' },
+                        ],
+                      },
+                      {
+                        $cond: [
+                          {
+                            $gt: [
+                              {
+                                $subtract: [
+                                  { $ifNull: ['$area.availableSqFt', 0] },
+                                  { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+                                ],
+                              },
+                              0,
+                            ],
+                          },
+                          {
+                            $subtract: [
+                              { $ifNull: ['$area.availableSqFt', 0] },
+                              { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+                            ],
+                          },
+                          0,
+                        ],
+                      },
+                      0,
+                    ],
+                  },
+                },
               },
             },
           ],
@@ -584,6 +729,26 @@ export async function getInventorySummary({ models: modelOverrides } = {}) {
     inProcessingSlabs: Number(inProcessingSlabs || 0),
     depletedOrZeroStockBatches: Number(metrics.depletedBatches || 0),
     depletedBatches: Number(metrics.depletedBatches || 0),
+    stockBalances: {
+      onHand: {
+        quantity: Number(metrics.totalOnHandQuantity || 0),
+        areaSqFt: availableAreaTrackedBatches > 0
+          ? roundArea(metrics.totalOnHandSqFt || 0)
+          : null,
+      },
+      reserved: {
+        quantity: Number(metrics.totalReservedQuantity || 0),
+        areaSqFt: availableAreaTrackedBatches > 0
+          ? roundArea(metrics.totalReservedSqFt || 0)
+          : null,
+      },
+      availableToPromise: {
+        quantity: Number(metrics.totalAvailableToPromiseQuantity || 0),
+        areaSqFt: availableAreaTrackedBatches > 0
+          ? roundArea(metrics.totalAvailableToPromiseSqFt || 0)
+          : null,
+      },
+    },
     inventoryCostValues: (result.inventoryCostValues || []).map((entry) => ({
       currency: entry._id,
       amount: Number(Number(entry.amount || 0).toFixed(2)),
@@ -641,9 +806,99 @@ export async function listInventoryBatches({
     InventoryBatchModel.countDocuments(filter),
   ]);
   return {
-    batches,
+    batches: batches.map(batchWithAvailability),
     total,
     page: pagination.page,
+    pages: Math.max(1, Math.ceil(total / pagination.limit)),
+  };
+}
+
+/**
+ * Authenticated Sales Order allocation lookup. Callers are responsible for
+ * applying admin authentication and Cache-Control headers at the route layer.
+ */
+export async function listInventoryAllocationCandidates({
+  stoneId,
+  stoneSlug,
+  batchId,
+  inventoryMode,
+  finish,
+  thicknessMm,
+  page = 1,
+  limit = DEFAULT_INVENTORY_PAGE_SIZE,
+  models: modelOverrides,
+} = {}) {
+  const stone = canonicalStoneSnapshot({ stoneId, slug: stoneSlug });
+  const pagination = normalizeInventoryPagination(page, limit);
+  const { InventoryBatchModel } = resolveModels(modelOverrides);
+  const filter = {
+    'stoneRef.stoneId': stone.stoneId,
+    status: 'AVAILABLE',
+    activeProcessingJob: null,
+    $expr: availableToPromiseExpression(),
+  };
+  if (batchId) filter._id = requireObjectId(batchId, 'Batch ID');
+  if (inventoryMode) filter.inventoryMode = ensureKnownEnum(inventoryMode, INVENTORY_MODES, 'Inventory mode');
+  if (finish) filter.finish = requiredString(finish, 'Finish', 120);
+  if (thicknessMm !== undefined && thicknessMm !== null && thicknessMm !== '') {
+    filter.thicknessMm = numberValue(thicknessMm, 'Thickness', { positive: true });
+  }
+
+  let query = InventoryBatchModel.find(filter);
+  query = applyQueryMethod(query, 'sort', { receivedDate: 1, batchNumber: 1, _id: 1 });
+  query = applyQueryMethod(query, 'skip', (pagination.page - 1) * pagination.limit);
+  query = applyQueryMethod(query, 'limit', pagination.limit);
+  query = applyQueryMethod(query, 'lean');
+  const [batches, total] = await Promise.all([
+    query,
+    InventoryBatchModel.countDocuments(filter),
+  ]);
+  return {
+    stone,
+    batches: batches.map(batchWithAvailability),
+    total,
+    page: pagination.page,
+    limit: pagination.limit,
+    pages: Math.max(1, Math.ceil(total / pagination.limit)),
+  };
+}
+
+export async function listReservableSlabs({
+  batchId,
+  page = 1,
+  limit = DEFAULT_INVENTORY_PAGE_SIZE,
+  models: modelOverrides,
+}) {
+  requireObjectId(batchId, 'Batch ID');
+  const pagination = normalizeInventoryPagination(page, limit);
+  const { InventoryBatchModel, SlabModel } = resolveModels(modelOverrides);
+  const batch = await findById(InventoryBatchModel, batchId);
+  if (!batch) throw new InventoryError('Inventory batch was not found.', 404, 'BATCH_NOT_FOUND');
+  if (batch.inventoryMode !== 'INDIVIDUAL_SLAB') {
+    throw new InventoryError('This batch does not use individual slab tracking.', 409);
+  }
+  if (batch.status !== 'AVAILABLE' || batch.activeProcessingJob) {
+    throw new InventoryError('This batch is not available for allocation.', 409, 'INVENTORY_UNAVAILABLE');
+  }
+
+  const filter = {
+    batch: batch._id,
+    status: 'AVAILABLE',
+    activeProcessingJob: null,
+    $or: [{ reservation: { $exists: false } }, { reservation: null }],
+  };
+  let query = SlabModel.find(filter);
+  query = applyQueryMethod(query, 'sort', { slabNumber: 1, _id: 1 });
+  query = applyQueryMethod(query, 'skip', (pagination.page - 1) * pagination.limit);
+  query = applyQueryMethod(query, 'limit', pagination.limit);
+  query = applyQueryMethod(query, 'lean');
+  const [slabs, total] = await Promise.all([query, SlabModel.countDocuments(filter)]);
+  return {
+    batch: batchWithAvailability(batch),
+    slabs,
+    total,
+    page: pagination.page,
+    limit: pagination.limit,
     pages: Math.max(1, Math.ceil(total / pagination.limit)),
   };
 }
@@ -653,7 +908,7 @@ export async function getInventoryBatch({ batchId, models: modelOverrides }) {
   const { InventoryBatchModel } = resolveModels(modelOverrides);
   const batch = await findById(InventoryBatchModel, batchId);
   if (!batch) throw new InventoryError('Inventory batch was not found.', 404, 'BATCH_NOT_FOUND');
-  return batch;
+  return batchWithAvailability(batch);
 }
 
 function statusForMetadataUpdate(batch, requestedStatus) {
@@ -747,10 +1002,7 @@ export async function getPublicStoneAvailability({
     'stoneRef.slug': stone.slug,
     publicAvailabilityVisible: true,
     status: 'AVAILABLE',
-    $or: [
-      { 'quantity.currentCount': { $gt: 0 } },
-      { 'area.availableSqFt': { $gt: 0 } },
-    ],
+    $expr: availableToPromiseExpression(),
   });
   const availableForEnquiry = Boolean(visibleAvailableBatch);
 
@@ -858,12 +1110,36 @@ async function adjustBatchMode({
 }) {
   const adjustment = normalizeAdjustment(direction, quantity, areaSqFt);
   const filter = { _id: batch._id, inventoryMode: 'BATCH', status: { $ne: 'ARCHIVED' } };
+  const reservationFloorChecks = [];
   if (direction === 'OUT' && adjustment.quantity > 0) {
     filter['quantity.currentCount'] = { $gte: adjustment.quantity };
+    reservationFloorChecks.push({
+      $gte: [
+        {
+          $subtract: [
+            { $ifNull: ['$quantity.currentCount', 0] },
+            adjustment.quantity,
+          ],
+        },
+        { $ifNull: ['$reservationBalance.quantity', 0] },
+      ],
+    });
   }
   if (direction === 'OUT' && adjustment.areaSqFt > 0) {
     filter['area.availableSqFt'] = { $gte: adjustment.areaSqFt };
+    reservationFloorChecks.push({
+      $gte: [
+        {
+          $subtract: [
+            { $ifNull: ['$area.availableSqFt', 0] },
+            adjustment.areaSqFt,
+          ],
+        },
+        { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+      ],
+    });
   }
+  if (reservationFloorChecks.length) filter.$expr = { $and: reservationFloorChecks };
 
   const updatedBatch = await models.InventoryBatchModel.findOneAndUpdate(
     filter,
@@ -916,11 +1192,21 @@ async function adjustIndividualSlabMode({
   if (!currentStatuses.includes(slab.status)) {
     throw new InventoryError(`Slab cannot be adjusted ${direction.toLowerCase()} from ${slab.status}.`, 409);
   }
+  if (direction === 'OUT' && slab.reservation) {
+    throw new InventoryError('A reserved slab cannot be adjusted out.', 409, 'INVENTORY_RESERVED');
+  }
 
   const area = slabInventoryArea(slab);
   const sign = direction === 'IN' ? 1 : -1;
   const updatedSlab = await models.SlabModel.findOneAndUpdate(
-    { _id: slab._id, batch: batch._id, status: { $in: currentStatuses } },
+    {
+      _id: slab._id,
+      batch: batch._id,
+      status: { $in: currentStatuses },
+      ...(direction === 'OUT'
+        ? { $or: [{ reservation: { $exists: false } }, { reservation: null }] }
+        : {}),
+    },
     { $set: { status: nextStatus, updatedBy: actor } },
     { new: true, session: session || undefined, runValidators: true },
   );
@@ -930,6 +1216,32 @@ async function adjustIndividualSlabMode({
   if (direction === 'OUT') {
     batchFilter['quantity.currentCount'] = { $gte: 1 };
     if (area > 0) batchFilter['area.availableSqFt'] = { $gte: area };
+    batchFilter.$expr = {
+      $and: [
+        {
+          $gte: [
+            {
+              $subtract: [
+                { $ifNull: ['$quantity.currentCount', 0] },
+                1,
+              ],
+            },
+            { $ifNull: ['$reservationBalance.quantity', 0] },
+          ],
+        },
+        {
+          $gte: [
+            {
+              $subtract: [
+                { $ifNull: ['$area.availableSqFt', 0] },
+                area,
+              ],
+            },
+            { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+          ],
+        },
+      ],
+    };
   }
   const updatedBatch = await models.InventoryBatchModel.findOneAndUpdate(
     batchFilter,
@@ -1047,6 +1359,13 @@ export async function transferInventory({
 
     if (batch.inventoryMode === 'BATCH') {
       if (slabId) throw new InventoryError('Batch-mode transfers move the whole batch, not a slab.');
+      if (hasActiveReservationBalance(batch)) {
+        throw new InventoryError(
+          'Reserved batch inventory cannot be transferred until its reservations are released.',
+          409,
+          'INVENTORY_RESERVED',
+        );
+      }
       const source = normalizeInventoryLocation(batch.location);
       if (locationsEqual(source, destination)) throw new InventoryError('Source and destination locations are the same.');
 
@@ -1082,6 +1401,13 @@ export async function transferInventory({
     if (!['AVAILABLE', 'HOLD'].includes(slab.status)) {
       throw new InventoryError('Only physically available or held slabs can be transferred.', 409);
     }
+    if (slab.reservation) {
+      throw new InventoryError(
+        'A reserved slab cannot be transferred until its reservation is released.',
+        409,
+        'INVENTORY_RESERVED',
+      );
+    }
     const source = normalizeInventoryLocation(slab.location);
     if (locationsEqual(source, destination)) throw new InventoryError('Source and destination locations are the same.');
 
@@ -1090,6 +1416,7 @@ export async function transferInventory({
         _id: slab._id,
         batch: batch._id,
         status: { $in: ['AVAILABLE', 'HOLD'] },
+        $or: [{ reservation: { $exists: false } }, { reservation: null }],
         ...locationConcurrencyFilter(source),
       },
       { $set: { location: destination, updatedBy: authenticatedActor } },
@@ -1364,6 +1691,13 @@ export async function issueInventoryToProcessing({
 
   if (batch.inventoryMode === 'BATCH') {
     if (slabIds.length) throw new InventoryError('Batch-mode processing cannot select individual slabs.');
+    if (hasActiveReservationBalance(batch)) {
+      throw new InventoryError(
+        'Reserved batch inventory must be released before it can be issued to processing.',
+        409,
+        'INVENTORY_RESERVED',
+      );
+    }
     const quantity = Number(batch.quantity?.currentCount || 0);
     const trackedArea = availableArea(batch);
     const areaSqFt = trackedArea == null ? undefined : roundArea(trackedArea);
@@ -1377,6 +1711,12 @@ export async function issueInventoryToProcessing({
       status: 'AVAILABLE',
       activeProcessingJob: null,
       'quantity.currentCount': quantity,
+      $expr: {
+        $and: [
+          { $eq: [{ $ifNull: ['$reservationBalance.quantity', 0] }, 0] },
+          { $eq: [{ $ifNull: ['$reservationBalance.areaSqFt', 0] }, 0] },
+        ],
+      },
     };
     if (trackedArea == null) filter['area.availableSqFt'] = { $exists: false };
     else filter['area.availableSqFt'] = trackedArea;
@@ -1439,6 +1779,7 @@ export async function issueInventoryToProcessing({
     batch: batch._id,
     status: 'AVAILABLE',
     activeProcessingJob: null,
+    $or: [{ reservation: { $exists: false } }, { reservation: null }],
   }, session, { slabNumber: 1, _id: 1 });
   if (!Array.isArray(slabs) || slabs.length !== normalizedSlabIds.length) {
     throw new InventoryError(
@@ -1455,6 +1796,7 @@ export async function issueInventoryToProcessing({
       batch: batch._id,
       status: 'AVAILABLE',
       activeProcessingJob: null,
+      $or: [{ reservation: { $exists: false } }, { reservation: null }],
     },
     {
       $set: {
@@ -1478,6 +1820,32 @@ export async function issueInventoryToProcessing({
       activeProcessingJob: null,
       'quantity.currentCount': { $gte: slabs.length },
       'area.availableSqFt': { $gte: areaSqFt },
+      $expr: {
+        $and: [
+          {
+            $gte: [
+              {
+                $subtract: [
+                  { $ifNull: ['$quantity.currentCount', 0] },
+                  slabs.length,
+                ],
+              },
+              { $ifNull: ['$reservationBalance.quantity', 0] },
+            ],
+          },
+          {
+            $gte: [
+              {
+                $subtract: [
+                  { $ifNull: ['$area.availableSqFt', 0] },
+                  areaSqFt,
+                ],
+              },
+              { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+            ],
+          },
+        ],
+      },
     },
     processingIssueBalancePipeline(-slabs.length, -areaSqFt, authenticatedActor),
     { new: true, session, updatePipeline: true },

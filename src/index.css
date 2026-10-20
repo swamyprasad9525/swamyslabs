@@ -129,6 +129,189 @@
 }
 
 /* ── Print styles — hide site chrome, show only the invoice ──────────────── */
+.quotation-print-root {
+  position: relative;
+  width: 100%;
+  max-width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 16mm;
+  overflow: hidden;
+  background: #fff;
+  color: #1c1917;
+  font-family: 'Inter', sans-serif;
+  font-size: 10pt;
+  line-height: 1.5;
+}
+
+.quotation-print-root h1,
+.quotation-print-root h2 { font-family: 'Inter', sans-serif; }
+
+.quotation-print-header {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(52mm, .55fr);
+  gap: 12mm;
+  padding-bottom: 8mm;
+  border-bottom: 2px solid #1c1917;
+}
+
+.quotation-print-header h1 {
+  margin: 2mm 0 1mm;
+  font-size: 20pt;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.quotation-print-header p,
+.quotation-print-parties p,
+.quotation-print-terms p,
+.quotation-print-root footer p { margin: .8mm 0; }
+
+.quotation-print-kicker {
+  color: #92400e;
+  font-size: 8pt;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.quotation-print-meta { margin: 0; border-top: 1px solid #d6d3d1; }
+
+.quotation-print-meta div,
+.quotation-print-summary dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8mm;
+  padding: 1.8mm 0;
+  border-bottom: 1px solid #e7e5e4;
+}
+
+.quotation-print-meta dt,
+.quotation-print-summary dt { color: #57534e; }
+
+.quotation-print-meta dd,
+.quotation-print-summary dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+
+.quotation-print-parties {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10mm;
+  min-height: 34mm;
+  padding: 7mm 0;
+}
+
+.quotation-print-parties h2,
+.quotation-print-terms h2 {
+  margin: 0 0 2mm;
+  color: #78716c;
+  font-size: 8pt;
+  font-weight: 800;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.quotation-print-table {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+}
+
+.quotation-print-table th {
+  padding: 2.5mm 2mm;
+  border: 1px solid #a8a29e;
+  background: #f5f5f4;
+  font-size: 7.5pt;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.quotation-print-table td {
+  padding: 3mm 2mm;
+  border: 1px solid #d6d3d1;
+  vertical-align: top;
+}
+
+.quotation-print-table th:nth-child(n + 3),
+.quotation-print-table td:nth-child(n + 3) { text-align: right; }
+
+.quotation-print-muted {
+  margin-top: 1mm;
+  color: #57534e;
+  font-size: 7.5pt;
+}
+
+.quotation-print-summary {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 6mm 0;
+}
+
+.quotation-print-summary dl { width: min(100%, 75mm); margin: 0; }
+
+.quotation-print-summary .quotation-print-total {
+  padding-top: 3mm;
+  border-top: 2px solid #1c1917;
+  border-bottom: 0;
+  font-size: 11pt;
+}
+
+.quotation-print-terms {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 4mm;
+  padding-top: 5mm;
+  border-top: 1px solid #d6d3d1;
+  white-space: pre-wrap;
+}
+
+.quotation-print-root footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 10mm;
+  margin-top: 12mm;
+  padding-top: 5mm;
+  border-top: 1px solid #d6d3d1;
+  color: #57534e;
+  font-size: 8pt;
+}
+
+.quotation-print-signature {
+  min-width: 48mm;
+  color: #1c1917;
+  font-weight: 700;
+  text-align: right;
+}
+
+.quotation-print-watermark {
+  position: absolute;
+  top: 43%;
+  left: 50%;
+  z-index: 0;
+  color: rgb(120 113 108 / 9%);
+  font-size: 56pt;
+  font-weight: 900;
+  letter-spacing: .12em;
+  transform: translate(-50%, -50%) rotate(-28deg);
+  user-select: none;
+}
+
 @media print {
   /* Hide everything that is not part of the invoice */
   nav,
@@ -150,10 +333,21 @@
   }
 
   /* Let the invoice print full-width */
-  .invoice-print-root {
+  .invoice-print-root,
+  .quotation-print-root {
     width: 100% !important;
     max-width: 100% !important;
+    min-height: 0 !important;
     margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .quotation-print-root footer { display: flex !important; }
+
+  .quotation-document-frame {
+    overflow: visible !important;
+    border: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
   }
@@ -176,6 +370,16 @@
     padding: 0 !important;
     background: #fff !important;
   }
+}
+
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media (max-width: 720px) {
+  .quotation-print-header,
+  .quotation-print-parties { grid-template-columns: 1fr; }
 }
 
 @layer components {
