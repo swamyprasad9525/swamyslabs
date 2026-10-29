@@ -1,5 +1,9 @@
 import mongoose from 'mongoose';
-import { SALES_ORDER_EVENT_TYPES, SALES_ORDER_STATUSES } from '../constants/commercial.js';
+import {
+  SALES_ORDER_EVENT_TYPES,
+  SALES_ORDER_FULFILLMENT_STATUSES,
+  SALES_ORDER_STATUSES,
+} from '../constants/commercial.js';
 
 const { Schema } = mongoose;
 const salesOrderEventSchema = new Schema({
@@ -11,6 +15,8 @@ const salesOrderEventSchema = new Schema({
   lineItemId: { type: Schema.Types.ObjectId, immutable: true },
   reservationId: { type: Schema.Types.ObjectId, ref: 'InventoryReservation', immutable: true },
   processingJobId: { type: Schema.Types.ObjectId, ref: 'ProcessingJob', immutable: true },
+  dispatchId: { type: Schema.Types.ObjectId, ref: 'Dispatch', immutable: true, index: true },
+  fulfillmentStatus: { type: String, enum: SALES_ORDER_FULFILLMENT_STATUSES, immutable: true },
   quantityDelta: { type: Number, immutable: true }, areaDeltaSqFt: { type: Number, immutable: true },
   actor: { type: String, required: true, trim: true, maxlength: 120, immutable: true },
   occurredAt: { type: Date, required: true, default: Date.now, immutable: true },
@@ -31,6 +37,7 @@ salesOrderEventSchema.pre('deleteOne', { document: true, query: false }, functio
   throw new Error('Sales order events are append-only.');
 });
 salesOrderEventSchema.index({ salesOrder: 1, occurredAt: -1, _id: -1 });
+salesOrderEventSchema.index({ dispatchId: 1, occurredAt: -1, _id: -1 });
 
 const SalesOrderEvent = mongoose.models.SalesOrderEvent || mongoose.model('SalesOrderEvent', salesOrderEventSchema);
 export default SalesOrderEvent;

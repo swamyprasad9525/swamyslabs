@@ -10,6 +10,7 @@ const eventDetailsSchema = new Schema({
   slabIds: [{ type: Schema.Types.ObjectId, ref: 'Slab' }],
   quantity: { type: Number, required: true, min: 0 },
   areaSqFt: { type: Number, required: true, min: 0 },
+  dispatchId: { type: Schema.Types.ObjectId, ref: 'Dispatch' },
 }, { _id: false });
 
 const reservationEventSchema = new Schema({
@@ -29,6 +30,7 @@ const reservationEventSchema = new Schema({
     index: true,
   },
   salesOrderLineItemId: { type: Schema.Types.ObjectId, required: true, immutable: true },
+  dispatchId: { type: Schema.Types.ObjectId, ref: 'Dispatch', immutable: true, index: true },
   type: { type: String, enum: RESERVATION_EVENT_TYPES, required: true, immutable: true, index: true },
   actor: { type: String, required: true, trim: true, maxlength: 120, immutable: true },
   occurredAt: { type: Date, required: true, default: Date.now, immutable: true },
@@ -73,6 +75,7 @@ reservationEventSchema.pre('bulkWrite', function preventEventBulkMutation() {
 
 reservationEventSchema.index({ reservation: 1, occurredAt: -1, _id: -1 });
 reservationEventSchema.index({ salesOrderId: 1, occurredAt: -1, _id: -1 });
+reservationEventSchema.index({ dispatchId: 1, occurredAt: -1, _id: -1 });
 
 const ReservationEvent = mongoose.models.ReservationEvent
   || mongoose.model('ReservationEvent', reservationEventSchema);

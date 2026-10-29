@@ -39,9 +39,10 @@ const inventoryMovementSchema = new Schema({
     default: null,
     immutable: true,
   },
-  relatedQuotationId: { type: Schema.Types.ObjectId, default: null, immutable: true },
-  relatedSalesOrderId: { type: Schema.Types.ObjectId, default: null, immutable: true },
-  relatedDispatchId: { type: Schema.Types.ObjectId, default: null, immutable: true },
+  relatedQuotationId: { type: Schema.Types.ObjectId, ref: 'Quotation', default: null, immutable: true },
+  relatedSalesOrderId: { type: Schema.Types.ObjectId, ref: 'SalesOrder', default: null, immutable: true },
+  relatedDispatchId: { type: Schema.Types.ObjectId, ref: 'Dispatch', default: null, immutable: true },
+  relatedReservationId: { type: Schema.Types.ObjectId, ref: 'InventoryReservation', default: null, immutable: true },
 }, {
   timestamps: { createdAt: true, updatedAt: false },
   minimize: true,
@@ -105,6 +106,22 @@ inventoryMovementSchema.pre('validate', function validateMovement() {
       this.invalidate('slab', 'Individual processing returns must identify one slab.');
     }
   }
+
+  if (this.type === 'DISPATCH') {
+    if (!this.relatedSalesOrderId || !this.relatedDispatchId || !this.relatedReservationId) {
+      this.invalidate('relatedDispatchId', 'Dispatch movements require sales order, dispatch, and reservation references.');
+    }
+    if (this.quantityDelta > 0 || this.areaDeltaSqFt > 0
+      || (this.quantityDelta === 0 && this.areaDeltaSqFt === 0)) {
+      this.invalidate('type', 'Dispatch deltas must remove inventory.');
+    }
+    if (!this.fromLocation) {
+      this.invalidate('fromLocation', 'Dispatch movements require a source location.');
+    }
+    if (this.inventoryMode === 'INDIVIDUAL_SLAB' && (!this.slab || this.quantityDelta !== -1)) {
+      this.invalidate('slab', 'Individual dispatch movements must identify one slab.');
+    }
+  }
 });
 
 inventoryMovementSchema.pre('save', function preventMovementRewrite() {
@@ -141,6 +158,8 @@ inventoryMovementSchema.pre('bulkWrite', function preventMovementBulkMutation() 
 inventoryMovementSchema.index({ batch: 1, occurredAt: -1 });
 inventoryMovementSchema.index({ slab: 1, occurredAt: -1 });
 inventoryMovementSchema.index({ relatedProcessingJobId: 1, occurredAt: -1 });
+inventoryMovementSchema.index({ relatedDispatchId: 1, occurredAt: -1 });
+inventoryMovementSchema.index({ relatedSalesOrderId: 1, occurredAt: -1 });
 
 const InventoryMovement = mongoose.models.InventoryMovement
   || mongoose.model('InventoryMovement', inventoryMovementSchema);

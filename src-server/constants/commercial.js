@@ -50,6 +50,7 @@ export const SALES_ORDER_EVENT_TYPES = Object.freeze([
   'RESERVATION_RELEASED',
   'PROCESSING_JOB_LINKED',
   'PROCESSING_JOB_UNLINKED',
+  'DISPATCH_CONFIRMED',
   'STATUS_CHANGED',
   'SALES_ORDER_CANCELLED',
   'NOTE',
@@ -58,11 +59,19 @@ export const SALES_ORDER_EVENT_TYPES = Object.freeze([
 export const RESERVATION_STATUSES = Object.freeze([
   'ACTIVE',
   'RELEASED',
+  'CONSUMED',
 ]);
 
 export const RESERVATION_EVENT_TYPES = Object.freeze([
   'RESERVED',
   'RELEASED',
+  'CONSUMED',
+]);
+
+export const SALES_ORDER_FULFILLMENT_STATUSES = Object.freeze([
+  'UNFULFILLED',
+  'PARTIALLY_DISPATCHED',
+  'FULLY_DISPATCHED',
 ]);
 
 export const COMMERCIAL_UNITS = Object.freeze([

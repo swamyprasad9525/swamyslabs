@@ -71,9 +71,15 @@ const inventoryReservationSchema = new Schema({
   },
   reservedAt: { type: Date, required: true, default: Date.now, immutable: true },
   reservedBy: { type: String, required: true, trim: true, maxlength: 120, immutable: true },
+  preparedDispatchId: { type: Schema.Types.ObjectId, ref: 'Dispatch', default: null, index: true },
+  preparedAt: { type: Date },
+  preparedBy: { type: String, trim: true, maxlength: 120 },
   releasedAt: { type: Date },
   releasedBy: { type: String, trim: true, maxlength: 120 },
   releaseReason: { type: String, trim: true, maxlength: 1000 },
+  consumedDispatchId: { type: Schema.Types.ObjectId, ref: 'Dispatch', default: null, index: true },
+  consumedAt: { type: Date },
+  consumedBy: { type: String, trim: true, maxlength: 120 },
 }, {
   timestamps: true,
   minimize: true,
@@ -102,11 +108,31 @@ inventoryReservationSchema.pre('validate', function validateReservation() {
     }
   }
 
-  if (this.status === 'ACTIVE' && (this.releasedAt || this.releasedBy || this.releaseReason)) {
-    this.invalidate('status', 'Active reservations cannot contain release details.');
+  const preparedValues = [this.preparedDispatchId, this.preparedAt, this.preparedBy].filter(Boolean).length;
+  if (preparedValues !== 0 && preparedValues !== 3) {
+    this.invalidate('preparedDispatchId', 'Dispatch preparation requires dispatch, date, and actor.');
   }
-  if (this.status === 'RELEASED' && (!this.releasedAt || !this.releasedBy || !this.releaseReason)) {
-    this.invalidate('status', 'Released reservations require release date, actor, and reason.');
+
+  if (this.status === 'ACTIVE'
+    && (this.releasedAt || this.releasedBy || this.releaseReason
+      || this.consumedDispatchId || this.consumedAt || this.consumedBy)) {
+    this.invalidate('status', 'Active reservations cannot contain release or consumption details.');
+  }
+  if (this.status === 'RELEASED') {
+    if (!this.releasedAt || !this.releasedBy || !this.releaseReason) {
+      this.invalidate('status', 'Released reservations require release date, actor, and reason.');
+    }
+    if (preparedValues || this.consumedDispatchId || this.consumedAt || this.consumedBy) {
+      this.invalidate('status', 'Released reservations cannot remain prepared or consumed.');
+    }
+  }
+  if (this.status === 'CONSUMED') {
+    if (!this.consumedDispatchId || !this.consumedAt || !this.consumedBy) {
+      this.invalidate('status', 'Consumed reservations require dispatch, date, and actor.');
+    }
+    if (preparedValues || this.releasedAt || this.releasedBy || this.releaseReason) {
+      this.invalidate('status', 'Consumed reservations cannot remain prepared or released.');
+    }
   }
 });
 
@@ -116,6 +142,8 @@ inventoryReservationSchema.index(
 );
 inventoryReservationSchema.index({ salesOrderId: 1, salesOrderLineItemId: 1, status: 1, createdAt: -1 });
 inventoryReservationSchema.index({ batch: 1, status: 1, createdAt: -1 });
+inventoryReservationSchema.index({ preparedDispatchId: 1, status: 1 });
+inventoryReservationSchema.index({ consumedDispatchId: 1, status: 1 });
 inventoryReservationSchema.index({ slabIds: 1, status: 1 });
 inventoryReservationSchema.index(
   { slabIds: 1 },

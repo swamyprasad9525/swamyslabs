@@ -1,5 +1,10 @@
 import mongoose from 'mongoose';
-import { COMMERCIAL_CURRENCIES, COMMERCIAL_UNITS, SALES_ORDER_STATUSES } from '../constants/commercial.js';
+import {
+  COMMERCIAL_CURRENCIES,
+  COMMERCIAL_UNITS,
+  SALES_ORDER_FULFILLMENT_STATUSES,
+  SALES_ORDER_STATUSES,
+} from '../constants/commercial.js';
 import { PROCESSING_OPERATION_TYPES } from '../constants/processing.js';
 
 const { Schema } = mongoose;
@@ -52,6 +57,10 @@ const orderLineSchema = new Schema({
   reservedQuantity: { type: Number, required: true, min: 0, default: 0 },
   reservedAreaSqFt: { type: Number, required: true, min: 0, default: 0 },
   activeReservationCount: { type: Number, required: true, min: 0, default: 0, validate: Number.isInteger },
+  fulfilledQuantity: { type: Number, required: true, min: 0, default: 0 },
+  remainingQuantity: { type: Number, required: true, min: 0, default: 0 },
+  fulfilledAreaSqFt: { type: Number, required: true, min: 0, default: 0 },
+  remainingAreaSqFt: { type: Number, required: true, min: 0, default: 0 },
 }, { _id: true });
 const allocationSummarySchema = new Schema({
   orderedQuantity: { type: Number, required: true, min: 0, default: 0 },
@@ -68,6 +77,24 @@ const processingLinkSchema = new Schema({
   processingJobId: { type: Schema.Types.ObjectId, ref: 'ProcessingJob', required: true },
   linkedAt: { type: Date, required: true },
 }, { _id: true });
+const fulfillmentSchema = new Schema({
+  status: {
+    type: String,
+    enum: SALES_ORDER_FULFILLMENT_STATUSES,
+    required: true,
+    default: 'UNFULFILLED',
+  },
+  orderedQuantity: { type: Number, required: true, min: 0, default: 0 },
+  fulfilledQuantity: { type: Number, required: true, min: 0, default: 0 },
+  remainingQuantity: { type: Number, required: true, min: 0, default: 0 },
+  orderedAreaSqFt: { type: Number, required: true, min: 0, default: 0 },
+  fulfilledAreaSqFt: { type: Number, required: true, min: 0, default: 0 },
+  remainingAreaSqFt: { type: Number, required: true, min: 0, default: 0 },
+  totalLineCount: { type: Number, required: true, min: 0, default: 0, validate: Number.isInteger },
+  fullyDispatchedLineCount: { type: Number, required: true, min: 0, default: 0, validate: Number.isInteger },
+  partiallyDispatchedLineCount: { type: Number, required: true, min: 0, default: 0, validate: Number.isInteger },
+  lastDispatchAt: { type: Date },
+}, { _id: false });
 
 const salesOrderSchema = new Schema({
   salesOrderNumber: { type: String, required: true, unique: true, immutable: true, trim: true },
@@ -84,6 +111,7 @@ const salesOrderSchema = new Schema({
   financialSnapshot: { type: Schema.Types.Mixed, required: true, immutable: true },
   requestedDeliveryDate: Date,
   allocationSummary: { type: allocationSummarySchema, required: true, default: () => ({}) },
+  fulfillment: { type: fulfillmentSchema, required: true, default: () => ({}) },
   processingLinks: { type: [processingLinkSchema], default: [] },
   confirmedAt: { type: Date, required: true }, cancelledAt: Date,
   cancellationReason: { type: String, trim: true, maxlength: 1000 },

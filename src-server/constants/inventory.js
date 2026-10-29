@@ -19,6 +19,7 @@ export const MOVEMENT_TYPES = Object.freeze([
   'TRANSFER',
   'PROCESSING_ISSUE',
   'PROCESSING_RETURN',
+  'DISPATCH',
 ]);
 
 export const ADJUSTMENT_DIRECTIONS = Object.freeze(['IN', 'OUT']);
