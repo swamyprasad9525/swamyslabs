@@ -5,6 +5,7 @@ import {
   createInventoryBatch,
   createInventorySlab,
   getInventoryBatch,
+  getPublicStoneAvailability,
   getInventorySummary,
   listInventoryBatches,
   listInventoryMovements,
@@ -70,6 +71,15 @@ export async function inventorySummary(_req, res) {
     return res.json({ summary: adminJson(summary) });
   } catch (error) {
     return handleInventoryError(res, error, 'Failed to load inventory summary.');
+  }
+}
+
+export async function publicStoneAvailability(req, res) {
+  try {
+    const result = await getPublicStoneAvailability({ stoneSlug: req.params.slug });
+    return res.json(result);
+  } catch (error) {
+    return handleInventoryError(res, error, 'Failed to load stone availability.');
   }
 }
 

@@ -33,10 +33,16 @@ const inventoryMovementSchema = new Schema({
   reason: { type: String, required: true, trim: true, maxlength: 1000, immutable: true },
   actor: { type: String, required: true, trim: true, maxlength: 120, immutable: true },
   occurredAt: { type: Date, required: true, default: Date.now, immutable: true },
-  relatedProcessingJobId: { type: Schema.Types.ObjectId, default: null, immutable: true },
-  relatedQuotationId: { type: Schema.Types.ObjectId, default: null, immutable: true },
-  relatedSalesOrderId: { type: Schema.Types.ObjectId, default: null, immutable: true },
-  relatedDispatchId: { type: Schema.Types.ObjectId, default: null, immutable: true },
+  relatedProcessingJobId: {
+    type: Schema.Types.ObjectId,
+    ref: 'ProcessingJob',
+    default: null,
+    immutable: true,
+  },
+  relatedQuotationId: { type: Schema.Types.ObjectId, ref: 'Quotation', default: null, immutable: true },
+  relatedSalesOrderId: { type: Schema.Types.ObjectId, ref: 'SalesOrder', default: null, immutable: true },
+  relatedDispatchId: { type: Schema.Types.ObjectId, ref: 'Dispatch', default: null, immutable: true },
+  relatedReservationId: { type: Schema.Types.ObjectId, ref: 'InventoryReservation', default: null, immutable: true },
 }, {
   timestamps: { createdAt: true, updatedAt: false },
   minimize: true,
@@ -66,6 +72,54 @@ inventoryMovementSchema.pre('validate', function validateMovement() {
     }
     if (!this.fromLocation || !this.toLocation) {
       this.invalidate('toLocation', 'Transfers require both source and destination locations.');
+    }
+  }
+
+  if (this.type === 'PROCESSING_ISSUE') {
+    if (!this.relatedProcessingJobId) {
+      this.invalidate('relatedProcessingJobId', 'Processing issues require a processing job reference.');
+    }
+    if (this.quantityDelta > 0 || this.areaDeltaSqFt > 0
+      || (this.quantityDelta === 0 && this.areaDeltaSqFt === 0)) {
+      this.invalidate('type', 'Processing-issue deltas must remove inventory.');
+    }
+    if (!this.fromLocation) {
+      this.invalidate('fromLocation', 'Processing issues require a source location.');
+    }
+    if (this.inventoryMode === 'INDIVIDUAL_SLAB' && (!this.slab || this.quantityDelta !== -1)) {
+      this.invalidate('slab', 'Individual processing issues must identify one slab.');
+    }
+  }
+
+  if (this.type === 'PROCESSING_RETURN') {
+    if (!this.relatedProcessingJobId) {
+      this.invalidate('relatedProcessingJobId', 'Processing returns require a processing job reference.');
+    }
+    if (this.quantityDelta < 0 || this.areaDeltaSqFt < 0
+      || (this.quantityDelta === 0 && this.areaDeltaSqFt === 0)) {
+      this.invalidate('type', 'Processing-return deltas must add inventory.');
+    }
+    if (!this.toLocation) {
+      this.invalidate('toLocation', 'Processing returns require a destination location.');
+    }
+    if (this.inventoryMode === 'INDIVIDUAL_SLAB' && (!this.slab || this.quantityDelta !== 1)) {
+      this.invalidate('slab', 'Individual processing returns must identify one slab.');
+    }
+  }
+
+  if (this.type === 'DISPATCH') {
+    if (!this.relatedSalesOrderId || !this.relatedDispatchId || !this.relatedReservationId) {
+      this.invalidate('relatedDispatchId', 'Dispatch movements require sales order, dispatch, and reservation references.');
+    }
+    if (this.quantityDelta > 0 || this.areaDeltaSqFt > 0
+      || (this.quantityDelta === 0 && this.areaDeltaSqFt === 0)) {
+      this.invalidate('type', 'Dispatch deltas must remove inventory.');
+    }
+    if (!this.fromLocation) {
+      this.invalidate('fromLocation', 'Dispatch movements require a source location.');
+    }
+    if (this.inventoryMode === 'INDIVIDUAL_SLAB' && (!this.slab || this.quantityDelta !== -1)) {
+      this.invalidate('slab', 'Individual dispatch movements must identify one slab.');
     }
   }
 });
@@ -103,6 +157,9 @@ inventoryMovementSchema.pre('bulkWrite', function preventMovementBulkMutation() 
 
 inventoryMovementSchema.index({ batch: 1, occurredAt: -1 });
 inventoryMovementSchema.index({ slab: 1, occurredAt: -1 });
+inventoryMovementSchema.index({ relatedProcessingJobId: 1, occurredAt: -1 });
+inventoryMovementSchema.index({ relatedDispatchId: 1, occurredAt: -1 });
+inventoryMovementSchema.index({ relatedSalesOrderId: 1, occurredAt: -1 });
 
 const InventoryMovement = mongoose.models.InventoryMovement
   || mongoose.model('InventoryMovement', inventoryMovementSchema);

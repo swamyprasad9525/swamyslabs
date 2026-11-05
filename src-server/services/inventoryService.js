@@ -14,6 +14,10 @@ import InventoryBatch from '../models/InventoryBatch.js';
 import InventoryMovement from '../models/InventoryMovement.js';
 import Slab from '../models/Slab.js';
 import { escapeRegex } from '../utils/security.js';
+import {
+  hasActiveReservationBalance,
+  inventoryAvailabilitySnapshot,
+} from './reservationService.js';
 
 const INDIA_OFFSET_MS = 330 * 60 * 1000;
 const AREA_PRECISION = 4;
@@ -37,6 +41,7 @@ const BATCH_METADATA_FIELDS = Object.freeze([
   'grade',
   'shade',
   'notes',
+  'publicAvailabilityVisible',
   'status',
 ]);
 
@@ -102,6 +107,12 @@ function numberValue(value, field, {
   return normalized;
 }
 
+function booleanValue(value, field, { defaultValue } = {}) {
+  if (value === undefined || value === null) return defaultValue;
+  if (typeof value !== 'boolean') throw new InventoryError(`${field} must be true or false.`);
+  return value;
+}
+
 function dateValue(value, field) {
   const date = new Date(value);
   if (!value || Number.isNaN(date.getTime())) throw new InventoryError(`${field} must be a valid date.`);
@@ -137,6 +148,41 @@ function availableArea(batch) {
 
 function slabInventoryArea(slab) {
   return Number(slab.usableAreaSqFt ?? slab.grossAreaSqFt);
+}
+
+function batchWithAvailability(batch) {
+  const value = typeof batch?.toObject === 'function' ? batch.toObject() : { ...batch };
+  return { ...value, inventoryAvailability: inventoryAvailabilitySnapshot(value) };
+}
+
+function availableToPromiseExpression() {
+  return {
+    $cond: [
+      { $isNumber: '$area.availableSqFt' },
+      {
+        $gt: [
+          {
+            $subtract: [
+              { $ifNull: ['$area.availableSqFt', 0] },
+              { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+            ],
+          },
+          0,
+        ],
+      },
+      {
+        $gt: [
+          {
+            $subtract: [
+              { $ifNull: ['$quantity.currentCount', 0] },
+              { $ifNull: ['$reservationBalance.quantity', 0] },
+            ],
+          },
+          0,
+        ],
+      },
+    ],
+  };
 }
 
 function ensureKnownEnum(value, allowed, field) {
@@ -415,6 +461,11 @@ function normalizeCreateBatch(input, actor, now) {
     grade: optionalString(input.grade, 'Grade', 100),
     shade: optionalString(input.shade, 'Shade', 100),
     notes: optionalString(input.notes, 'Notes', 3000),
+    publicAvailabilityVisible: booleanValue(
+      input.publicAvailabilityVisible,
+      'Public availability visibility',
+      { defaultValue: false },
+    ),
     status: requestedStatus,
     createdBy: actor,
     updatedBy: actor,
@@ -465,7 +516,7 @@ export async function createInventoryBatch({
 
 export async function getInventorySummary({ models: modelOverrides } = {}) {
   const { InventoryBatchModel, SlabModel } = resolveModels(modelOverrides);
-  const [aggregation, individualSlabs] = await Promise.all([
+  const [aggregation, slabCounts] = await Promise.all([
     InventoryBatchModel.aggregate([
       {
         $facet: {
@@ -477,6 +528,9 @@ export async function getInventorySummary({ models: modelOverrides } = {}) {
                 activeBatches: { $sum: 1 },
                 availableBatches: {
                   $sum: { $cond: [{ $eq: ['$status', 'AVAILABLE'] }, 1, 0] },
+                },
+                inProcessingBatches: {
+                  $sum: { $cond: [{ $eq: ['$status', 'IN_PROCESSING'] }, 1, 0] },
                 },
                 depletedBatches: {
                   $sum: {
@@ -521,6 +575,112 @@ export async function getInventorySummary({ models: modelOverrides } = {}) {
                     ],
                   },
                 },
+                totalOnHandQuantity: {
+                  $sum: {
+                    $cond: [
+                      { $in: ['$status', ['AVAILABLE', 'HOLD']] },
+                      { $ifNull: ['$quantity.currentCount', 0] },
+                      0,
+                    ],
+                  },
+                },
+                totalReservedQuantity: {
+                  $sum: {
+                    $cond: [
+                      { $ne: ['$status', 'ARCHIVED'] },
+                      { $ifNull: ['$reservationBalance.quantity', 0] },
+                      0,
+                    ],
+                  },
+                },
+                totalAvailableToPromiseQuantity: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ['$status', 'AVAILABLE'] },
+                      {
+                        $cond: [
+                          {
+                            $gt: [
+                              {
+                                $subtract: [
+                                  { $ifNull: ['$quantity.currentCount', 0] },
+                                  { $ifNull: ['$reservationBalance.quantity', 0] },
+                                ],
+                              },
+                              0,
+                            ],
+                          },
+                          {
+                            $subtract: [
+                              { $ifNull: ['$quantity.currentCount', 0] },
+                              { $ifNull: ['$reservationBalance.quantity', 0] },
+                            ],
+                          },
+                          0,
+                        ],
+                      },
+                      0,
+                    ],
+                  },
+                },
+                totalOnHandSqFt: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          { $in: ['$status', ['AVAILABLE', 'HOLD']] },
+                          { $isNumber: '$area.availableSqFt' },
+                        ],
+                      },
+                      { $ifNull: ['$area.availableSqFt', 0] },
+                      0,
+                    ],
+                  },
+                },
+                totalReservedSqFt: {
+                  $sum: {
+                    $cond: [
+                      { $ne: ['$status', 'ARCHIVED'] },
+                      { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+                      0,
+                    ],
+                  },
+                },
+                totalAvailableToPromiseSqFt: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          { $eq: ['$status', 'AVAILABLE'] },
+                          { $isNumber: '$area.availableSqFt' },
+                        ],
+                      },
+                      {
+                        $cond: [
+                          {
+                            $gt: [
+                              {
+                                $subtract: [
+                                  { $ifNull: ['$area.availableSqFt', 0] },
+                                  { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+                                ],
+                              },
+                              0,
+                            ],
+                          },
+                          {
+                            $subtract: [
+                              { $ifNull: ['$area.availableSqFt', 0] },
+                              { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+                            ],
+                          },
+                          0,
+                        ],
+                      },
+                      0,
+                    ],
+                  },
+                },
               },
             },
           ],
@@ -545,22 +705,50 @@ export async function getInventorySummary({ models: modelOverrides } = {}) {
         },
       },
     ]),
-    SlabModel.countDocuments({ status: { $in: ['AVAILABLE', 'HOLD'] } }),
+    Promise.all([
+      SlabModel.countDocuments({ status: { $in: ['AVAILABLE', 'HOLD'] } }),
+      SlabModel.countDocuments({ status: 'IN_PROCESSING' }),
+    ]),
   ]);
 
   const result = aggregation[0] || {};
   const metrics = result.metrics?.[0] || {};
+  const [individualSlabs, inProcessingSlabs] = Array.isArray(slabCounts)
+    ? slabCounts
+    : [slabCounts, 0];
   const availableAreaTrackedBatches = Number(metrics.availableAreaTrackedBatches || 0);
   return {
     activeBatches: Number(metrics.activeBatches || 0),
     availableBatches: Number(metrics.availableBatches || 0),
+    inProcessingBatches: Number(metrics.inProcessingBatches || 0),
     availableAreaTrackedBatches,
     totalAvailableSqFt: availableAreaTrackedBatches > 0
       ? roundArea(metrics.totalAvailableSqFt || 0)
       : null,
     individualSlabs: Number(individualSlabs || 0),
+    inProcessingSlabs: Number(inProcessingSlabs || 0),
     depletedOrZeroStockBatches: Number(metrics.depletedBatches || 0),
     depletedBatches: Number(metrics.depletedBatches || 0),
+    stockBalances: {
+      onHand: {
+        quantity: Number(metrics.totalOnHandQuantity || 0),
+        areaSqFt: availableAreaTrackedBatches > 0
+          ? roundArea(metrics.totalOnHandSqFt || 0)
+          : null,
+      },
+      reserved: {
+        quantity: Number(metrics.totalReservedQuantity || 0),
+        areaSqFt: availableAreaTrackedBatches > 0
+          ? roundArea(metrics.totalReservedSqFt || 0)
+          : null,
+      },
+      availableToPromise: {
+        quantity: Number(metrics.totalAvailableToPromiseQuantity || 0),
+        areaSqFt: availableAreaTrackedBatches > 0
+          ? roundArea(metrics.totalAvailableToPromiseSqFt || 0)
+          : null,
+      },
+    },
     inventoryCostValues: (result.inventoryCostValues || []).map((entry) => ({
       currency: entry._id,
       amount: Number(Number(entry.amount || 0).toFixed(2)),
@@ -618,9 +806,99 @@ export async function listInventoryBatches({
     InventoryBatchModel.countDocuments(filter),
   ]);
   return {
-    batches,
+    batches: batches.map(batchWithAvailability),
     total,
     page: pagination.page,
+    pages: Math.max(1, Math.ceil(total / pagination.limit)),
+  };
+}
+
+/**
+ * Authenticated Sales Order allocation lookup. Callers are responsible for
+ * applying admin authentication and Cache-Control headers at the route layer.
+ */
+export async function listInventoryAllocationCandidates({
+  stoneId,
+  stoneSlug,
+  batchId,
+  inventoryMode,
+  finish,
+  thicknessMm,
+  page = 1,
+  limit = DEFAULT_INVENTORY_PAGE_SIZE,
+  models: modelOverrides,
+} = {}) {
+  const stone = canonicalStoneSnapshot({ stoneId, slug: stoneSlug });
+  const pagination = normalizeInventoryPagination(page, limit);
+  const { InventoryBatchModel } = resolveModels(modelOverrides);
+  const filter = {
+    'stoneRef.stoneId': stone.stoneId,
+    status: 'AVAILABLE',
+    activeProcessingJob: null,
+    $expr: availableToPromiseExpression(),
+  };
+  if (batchId) filter._id = requireObjectId(batchId, 'Batch ID');
+  if (inventoryMode) filter.inventoryMode = ensureKnownEnum(inventoryMode, INVENTORY_MODES, 'Inventory mode');
+  if (finish) filter.finish = requiredString(finish, 'Finish', 120);
+  if (thicknessMm !== undefined && thicknessMm !== null && thicknessMm !== '') {
+    filter.thicknessMm = numberValue(thicknessMm, 'Thickness', { positive: true });
+  }
+
+  let query = InventoryBatchModel.find(filter);
+  query = applyQueryMethod(query, 'sort', { receivedDate: 1, batchNumber: 1, _id: 1 });
+  query = applyQueryMethod(query, 'skip', (pagination.page - 1) * pagination.limit);
+  query = applyQueryMethod(query, 'limit', pagination.limit);
+  query = applyQueryMethod(query, 'lean');
+  const [batches, total] = await Promise.all([
+    query,
+    InventoryBatchModel.countDocuments(filter),
+  ]);
+  return {
+    stone,
+    batches: batches.map(batchWithAvailability),
+    total,
+    page: pagination.page,
+    limit: pagination.limit,
+    pages: Math.max(1, Math.ceil(total / pagination.limit)),
+  };
+}
+
+export async function listReservableSlabs({
+  batchId,
+  page = 1,
+  limit = DEFAULT_INVENTORY_PAGE_SIZE,
+  models: modelOverrides,
+}) {
+  requireObjectId(batchId, 'Batch ID');
+  const pagination = normalizeInventoryPagination(page, limit);
+  const { InventoryBatchModel, SlabModel } = resolveModels(modelOverrides);
+  const batch = await findById(InventoryBatchModel, batchId);
+  if (!batch) throw new InventoryError('Inventory batch was not found.', 404, 'BATCH_NOT_FOUND');
+  if (batch.inventoryMode !== 'INDIVIDUAL_SLAB') {
+    throw new InventoryError('This batch does not use individual slab tracking.', 409);
+  }
+  if (batch.status !== 'AVAILABLE' || batch.activeProcessingJob) {
+    throw new InventoryError('This batch is not available for allocation.', 409, 'INVENTORY_UNAVAILABLE');
+  }
+
+  const filter = {
+    batch: batch._id,
+    status: 'AVAILABLE',
+    activeProcessingJob: null,
+    $or: [{ reservation: { $exists: false } }, { reservation: null }],
+  };
+  let query = SlabModel.find(filter);
+  query = applyQueryMethod(query, 'sort', { slabNumber: 1, _id: 1 });
+  query = applyQueryMethod(query, 'skip', (pagination.page - 1) * pagination.limit);
+  query = applyQueryMethod(query, 'limit', pagination.limit);
+  query = applyQueryMethod(query, 'lean');
+  const [slabs, total] = await Promise.all([query, SlabModel.countDocuments(filter)]);
+  return {
+    batch: batchWithAvailability(batch),
+    slabs,
+    total,
+    page: pagination.page,
+    limit: pagination.limit,
     pages: Math.max(1, Math.ceil(total / pagination.limit)),
   };
 }
@@ -630,14 +908,17 @@ export async function getInventoryBatch({ batchId, models: modelOverrides }) {
   const { InventoryBatchModel } = resolveModels(modelOverrides);
   const batch = await findById(InventoryBatchModel, batchId);
   if (!batch) throw new InventoryError('Inventory batch was not found.', 404, 'BATCH_NOT_FOUND');
-  return batch;
+  return batchWithAvailability(batch);
 }
 
 function statusForMetadataUpdate(batch, requestedStatus) {
   if (!requestedStatus || requestedStatus === batch.status) return batch.status;
   ensureKnownEnum(requestedStatus, INVENTORY_STATUSES, 'Status');
   if (batch.status === 'ARCHIVED') throw new InventoryError('Archived batches cannot be changed.', 409);
-  if (['DRAFT', 'DEPLETED'].includes(requestedStatus)) {
+  if (batch.status === 'IN_PROCESSING' || batch.activeProcessingJob) {
+    throw new InventoryError('Inventory in processing cannot be changed through a metadata update.', 409);
+  }
+  if (['DRAFT', 'IN_PROCESSING', 'DEPLETED'].includes(requestedStatus)) {
     throw new InventoryError(`${requestedStatus} status is derived from inventory balances.`);
   }
   if (requestedStatus === 'AVAILABLE' && !hasPositiveInventory(batch)) {
@@ -671,6 +952,9 @@ export async function updateInventoryBatch({
   const batch = await findById(InventoryBatchModel, batchId, session);
   if (!batch) throw new InventoryError('Inventory batch was not found.', 404, 'BATCH_NOT_FOUND');
   if (batch.status === 'ARCHIVED') throw new InventoryError('Archived batches cannot be changed.', 409);
+  if (batch.status === 'IN_PROCESSING' || batch.activeProcessingJob) {
+    throw new InventoryError('Inventory in processing cannot be changed through a metadata update.', 409);
+  }
 
   if ('receivedDate' in updates) batch.receivedDate = dateValue(updates.receivedDate, 'Received date');
   if ('externalLotNumber' in updates) {
@@ -687,10 +971,56 @@ export async function updateInventoryBatch({
   if ('grade' in updates) batch.grade = optionalString(updates.grade, 'Grade', 100);
   if ('shade' in updates) batch.shade = optionalString(updates.shade, 'Shade', 100);
   if ('notes' in updates) batch.notes = optionalString(updates.notes, 'Notes', 3000);
+  if ('publicAvailabilityVisible' in updates) {
+    batch.publicAvailabilityVisible = booleanValue(
+      updates.publicAvailabilityVisible,
+      'Public availability visibility',
+    );
+  }
   if ('status' in updates) batch.status = statusForMetadataUpdate(batch, updates.status);
   batch.updatedBy = authenticatedActor;
   await batch.save(session ? { session } : undefined);
   return batch;
+}
+
+export async function getPublicStoneAvailability({
+  stoneSlug,
+  models: modelOverrides,
+}) {
+  let stone;
+  try {
+    stone = canonicalStoneSnapshot({ slug: stoneSlug });
+  } catch (error) {
+    if (error instanceof InventoryError && error.code === 'INVALID_STONE') {
+      throw new InventoryError('Catalog stone was not found.', 404, 'STONE_NOT_FOUND');
+    }
+    throw error;
+  }
+
+  const { InventoryBatchModel } = resolveModels(modelOverrides);
+  const visibleAvailableBatch = await InventoryBatchModel.exists({
+    'stoneRef.slug': stone.slug,
+    publicAvailabilityVisible: true,
+    status: 'AVAILABLE',
+    $expr: availableToPromiseExpression(),
+  });
+  const availableForEnquiry = Boolean(visibleAvailableBatch);
+
+  return {
+    stone: {
+      slug: stone.slug,
+      name: stone.name,
+    },
+    availability: availableForEnquiry
+      ? {
+        status: 'AVAILABLE_FOR_ENQUIRY',
+        message: 'Currently available for enquiry. Final selection and quantity are confirmed during quotation.',
+      }
+      : {
+        status: 'CONFIRM_DURING_QUOTATION',
+        message: 'Availability is confirmed during quotation.',
+      },
+  };
 }
 
 function derivedStatusExpression(quantityExpression, areaExpression) {
@@ -728,6 +1058,28 @@ function batchBalancePipeline(quantityDelta, areaDelta, actor, { receipt = false
   return [{ $set: set }];
 }
 
+function processingIssueBalancePipeline(quantityDelta, areaDelta, actor) {
+  const currentQuantity = { $ifNull: ['$quantity.currentCount', 0] };
+  const currentArea = { $ifNull: ['$area.availableSqFt', 0] };
+  const nextQuantity = { $add: [currentQuantity, quantityDelta] };
+  const nextArea = { $add: [currentArea, areaDelta] };
+  return [{
+    $set: {
+      'quantity.currentCount': nextQuantity,
+      'area.availableSqFt': nextArea,
+      status: {
+        $cond: [
+          { $or: [{ $gt: [nextQuantity, 0] }, { $gt: [nextArea, 0] }] },
+          'AVAILABLE',
+          'IN_PROCESSING',
+        ],
+      },
+      updatedBy: actor,
+      updatedAt: '$$NOW',
+    },
+  }];
+}
+
 function normalizeAdjustment(direction, quantity, areaSqFt) {
   ensureKnownEnum(direction, ADJUSTMENT_DIRECTIONS, 'Adjustment direction');
   const normalizedQuantity = numberValue(quantity ?? 0, 'Adjustment quantity', { integer: true });
@@ -758,17 +1110,41 @@ async function adjustBatchMode({
 }) {
   const adjustment = normalizeAdjustment(direction, quantity, areaSqFt);
   const filter = { _id: batch._id, inventoryMode: 'BATCH', status: { $ne: 'ARCHIVED' } };
+  const reservationFloorChecks = [];
   if (direction === 'OUT' && adjustment.quantity > 0) {
     filter['quantity.currentCount'] = { $gte: adjustment.quantity };
+    reservationFloorChecks.push({
+      $gte: [
+        {
+          $subtract: [
+            { $ifNull: ['$quantity.currentCount', 0] },
+            adjustment.quantity,
+          ],
+        },
+        { $ifNull: ['$reservationBalance.quantity', 0] },
+      ],
+    });
   }
   if (direction === 'OUT' && adjustment.areaSqFt > 0) {
     filter['area.availableSqFt'] = { $gte: adjustment.areaSqFt };
+    reservationFloorChecks.push({
+      $gte: [
+        {
+          $subtract: [
+            { $ifNull: ['$area.availableSqFt', 0] },
+            adjustment.areaSqFt,
+          ],
+        },
+        { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+      ],
+    });
   }
+  if (reservationFloorChecks.length) filter.$expr = { $and: reservationFloorChecks };
 
   const updatedBatch = await models.InventoryBatchModel.findOneAndUpdate(
     filter,
     batchBalancePipeline(adjustment.quantityDelta, adjustment.areaDelta, actor),
-    { new: true, session: session || undefined },
+    { new: true, session: session || undefined, updatePipeline: true },
   );
   if (!updatedBatch) {
     throw new InventoryError('Adjustment would make inventory negative or the batch changed concurrently.', 409);
@@ -816,11 +1192,21 @@ async function adjustIndividualSlabMode({
   if (!currentStatuses.includes(slab.status)) {
     throw new InventoryError(`Slab cannot be adjusted ${direction.toLowerCase()} from ${slab.status}.`, 409);
   }
+  if (direction === 'OUT' && slab.reservation) {
+    throw new InventoryError('A reserved slab cannot be adjusted out.', 409, 'INVENTORY_RESERVED');
+  }
 
   const area = slabInventoryArea(slab);
   const sign = direction === 'IN' ? 1 : -1;
   const updatedSlab = await models.SlabModel.findOneAndUpdate(
-    { _id: slab._id, batch: batch._id, status: { $in: currentStatuses } },
+    {
+      _id: slab._id,
+      batch: batch._id,
+      status: { $in: currentStatuses },
+      ...(direction === 'OUT'
+        ? { $or: [{ reservation: { $exists: false } }, { reservation: null }] }
+        : {}),
+    },
     { $set: { status: nextStatus, updatedBy: actor } },
     { new: true, session: session || undefined, runValidators: true },
   );
@@ -830,11 +1216,37 @@ async function adjustIndividualSlabMode({
   if (direction === 'OUT') {
     batchFilter['quantity.currentCount'] = { $gte: 1 };
     if (area > 0) batchFilter['area.availableSqFt'] = { $gte: area };
+    batchFilter.$expr = {
+      $and: [
+        {
+          $gte: [
+            {
+              $subtract: [
+                { $ifNull: ['$quantity.currentCount', 0] },
+                1,
+              ],
+            },
+            { $ifNull: ['$reservationBalance.quantity', 0] },
+          ],
+        },
+        {
+          $gte: [
+            {
+              $subtract: [
+                { $ifNull: ['$area.availableSqFt', 0] },
+                area,
+              ],
+            },
+            { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+          ],
+        },
+      ],
+    };
   }
   const updatedBatch = await models.InventoryBatchModel.findOneAndUpdate(
     batchFilter,
     batchBalancePipeline(sign, sign * area, actor),
-    { new: true, session: session || undefined },
+    { new: true, session: session || undefined, updatePipeline: true },
   );
   if (!updatedBatch) {
     throw new InventoryError('Adjustment would make inventory negative or the batch changed concurrently.', 409);
@@ -879,6 +1291,9 @@ export async function adjustInventoryStock({
     const batch = await findById(models.InventoryBatchModel, batchId, activeSession);
     if (!batch) throw new InventoryError('Inventory batch was not found.', 404, 'BATCH_NOT_FOUND');
     if (batch.status === 'ARCHIVED') throw new InventoryError('Archived batches cannot be adjusted.', 409);
+    if (batch.status === 'IN_PROCESSING' || batch.activeProcessingJob) {
+      throw new InventoryError('Inventory in processing cannot be adjusted.', 409);
+    }
 
     if (batch.inventoryMode === 'BATCH') {
       if (slabId) throw new InventoryError('Batch-mode adjustments cannot target a slab.');
@@ -938,9 +1353,19 @@ export async function transferInventory({
     const batch = await findById(models.InventoryBatchModel, batchId, activeSession);
     if (!batch) throw new InventoryError('Inventory batch was not found.', 404, 'BATCH_NOT_FOUND');
     if (batch.status === 'ARCHIVED') throw new InventoryError('Archived inventory cannot be transferred.', 409);
+    if (batch.status === 'IN_PROCESSING' || batch.activeProcessingJob) {
+      throw new InventoryError('Inventory in processing cannot be transferred.', 409);
+    }
 
     if (batch.inventoryMode === 'BATCH') {
       if (slabId) throw new InventoryError('Batch-mode transfers move the whole batch, not a slab.');
+      if (hasActiveReservationBalance(batch)) {
+        throw new InventoryError(
+          'Reserved batch inventory cannot be transferred until its reservations are released.',
+          409,
+          'INVENTORY_RESERVED',
+        );
+      }
       const source = normalizeInventoryLocation(batch.location);
       if (locationsEqual(source, destination)) throw new InventoryError('Source and destination locations are the same.');
 
@@ -976,6 +1401,13 @@ export async function transferInventory({
     if (!['AVAILABLE', 'HOLD'].includes(slab.status)) {
       throw new InventoryError('Only physically available or held slabs can be transferred.', 409);
     }
+    if (slab.reservation) {
+      throw new InventoryError(
+        'A reserved slab cannot be transferred until its reservation is released.',
+        409,
+        'INVENTORY_RESERVED',
+      );
+    }
     const source = normalizeInventoryLocation(slab.location);
     if (locationsEqual(source, destination)) throw new InventoryError('Source and destination locations are the same.');
 
@@ -984,6 +1416,7 @@ export async function transferInventory({
         _id: slab._id,
         batch: batch._id,
         status: { $in: ['AVAILABLE', 'HOLD'] },
+        $or: [{ reservation: { $exists: false } }, { reservation: null }],
         ...locationConcurrencyFilter(source),
       },
       { $set: { location: destination, updatedBy: authenticatedActor } },
@@ -1083,6 +1516,9 @@ export async function createInventorySlab({
       throw new InventoryError('Slabs can only be added to an individual-slab batch.', 409);
     }
     if (batch.status === 'ARCHIVED') throw new InventoryError('Archived batches cannot receive slabs.', 409);
+    if (batch.status === 'IN_PROCESSING' || batch.activeProcessingJob) {
+      throw new InventoryError('A fully issued batch cannot receive slabs while it is in processing.', 409);
+    }
 
     const slabNumber = await nextInventoryReference(
       INVENTORY_REFERENCE_PREFIXES.SLAB,
@@ -1094,6 +1530,7 @@ export async function createInventorySlab({
       slabNumber,
       batch: batch._id,
       stoneRef: batch.stoneRef?.toObject ? batch.stoneRef.toObject() : { ...batch.stoneRef },
+      finish: batch.finish,
       dimensions: normalized.dimensions,
       grossAreaSqFt: normalized.grossAreaSqFt,
       usableAreaSqFt: normalized.usableAreaSqFt,
@@ -1111,7 +1548,7 @@ export async function createInventorySlab({
     const updatedBatch = await models.InventoryBatchModel.findOneAndUpdate(
       { _id: batch._id, inventoryMode: 'INDIVIDUAL_SLAB', status: { $ne: 'ARCHIVED' } },
       batchBalancePipeline(1, area, authenticatedActor, { receipt: true }),
-      { new: true, session: activeSession || undefined },
+      { new: true, session: activeSession || undefined, updatePipeline: true },
     );
     if (!updatedBatch) throw new InventoryError('Batch changed concurrently. Try again.', 409);
 
@@ -1133,6 +1570,7 @@ export async function listInventorySlabs({
   batchId,
   page = 1,
   limit = DEFAULT_INVENTORY_PAGE_SIZE,
+  status,
   models: modelOverrides,
 }) {
   requireObjectId(batchId, 'Batch ID');
@@ -1143,7 +1581,8 @@ export async function listInventorySlabs({
     throw new InventoryError('This batch does not use individual slab tracking.', 409);
   }
   const pagination = normalizeInventoryPagination(page, limit);
-  const filter = { batch: batchId };
+  if (status) ensureKnownEnum(status, INVENTORY_STATUSES, 'Status');
+  const filter = compactObject({ batch: batchId, status });
 
   let query = SlabModel.find(filter);
   query = applyQueryMethod(query, 'sort', { slabNumber: 1, _id: 1 });
@@ -1177,6 +1616,9 @@ export async function updateInventorySlab({
   const { InventoryBatchModel, SlabModel } = resolveModels(modelOverrides);
   const slab = await findById(SlabModel, slabId, session);
   if (!slab) throw new InventoryError('Slab was not found.', 404, 'SLAB_NOT_FOUND');
+  if (slab.status === 'IN_PROCESSING' || slab.activeProcessingJob) {
+    throw new InventoryError('A slab in processing cannot be changed through a metadata update.', 409);
+  }
   const batch = await findById(InventoryBatchModel, slab.batch, session);
   if (!batch) throw new InventoryError('The slab batch was not found.', 409, 'BATCH_NOT_FOUND');
   if (batch.status === 'ARCHIVED') throw new InventoryError('Slabs in an archived batch cannot be changed.', 409);
@@ -1188,4 +1630,501 @@ export async function updateInventorySlab({
   slab.updatedBy = authenticatedActor;
   await slab.save(session ? { session } : undefined);
   return slab;
+}
+
+function requireProcessingSession(session) {
+  if (typeof session?.inTransaction !== 'function' || !session.inTransaction()) {
+    throw new InventoryError(
+      'An active MongoDB transaction is required for processing inventory changes.',
+      503,
+      'TRANSACTION_REQUIRED',
+    );
+  }
+  return session;
+}
+
+function idsEqual(left, right) {
+  return String(left || '') === String(right || '');
+}
+
+function plainSubdocument(value) {
+  if (!value) return undefined;
+  return typeof value.toObject === 'function' ? value.toObject() : { ...value };
+}
+
+async function findMany(Model, filter, session, sort = null) {
+  let query = Model.find(filter);
+  if (session && typeof query?.session === 'function') query = query.session(session);
+  if (sort && typeof query?.sort === 'function') query = query.sort(sort);
+  return query;
+}
+
+/**
+ * Removes ready stock from inventory for a processing job. The caller owns the
+ * transaction; running this helper without a session is deliberately forbidden.
+ */
+export async function issueInventoryToProcessing({
+  processingJobId,
+  jobNumber,
+  batchId,
+  slabIds = [],
+  actor,
+  now = new Date(),
+  models: modelOverrides,
+  session,
+}) {
+  requireProcessingSession(session);
+  requireObjectId(processingJobId, 'Processing job ID');
+  requireObjectId(batchId, 'Batch ID');
+  const authenticatedActor = requireActor(actor);
+  const normalizedJobNumber = requiredString(jobNumber, 'Processing job number', 80);
+  const models = resolveModels(modelOverrides);
+  const batch = await findById(models.InventoryBatchModel, batchId, session);
+
+  if (!batch) throw new InventoryError('Inventory batch was not found.', 404, 'BATCH_NOT_FOUND');
+  if (batch.status !== 'AVAILABLE') {
+    throw new InventoryError('Only available inventory can be issued to processing.', 409, 'INVENTORY_UNAVAILABLE');
+  }
+  if (batch.activeProcessingJob) {
+    throw new InventoryError('This batch is already assigned to processing.', 409, 'INVENTORY_IN_PROCESSING');
+  }
+
+  if (batch.inventoryMode === 'BATCH') {
+    if (slabIds.length) throw new InventoryError('Batch-mode processing cannot select individual slabs.');
+    if (hasActiveReservationBalance(batch)) {
+      throw new InventoryError(
+        'Reserved batch inventory must be released before it can be issued to processing.',
+        409,
+        'INVENTORY_RESERVED',
+      );
+    }
+    const quantity = Number(batch.quantity?.currentCount || 0);
+    const trackedArea = availableArea(batch);
+    const areaSqFt = trackedArea == null ? undefined : roundArea(trackedArea);
+    if (quantity <= 0 && Number(areaSqFt || 0) <= 0) {
+      throw new InventoryError('The batch has no available material to process.', 409, 'INVENTORY_UNAVAILABLE');
+    }
+
+    const filter = {
+      _id: batch._id,
+      inventoryMode: 'BATCH',
+      status: 'AVAILABLE',
+      activeProcessingJob: null,
+      'quantity.currentCount': quantity,
+      $expr: {
+        $and: [
+          { $eq: [{ $ifNull: ['$reservationBalance.quantity', 0] }, 0] },
+          { $eq: [{ $ifNull: ['$reservationBalance.areaSqFt', 0] }, 0] },
+        ],
+      },
+    };
+    if (trackedArea == null) filter['area.availableSqFt'] = { $exists: false };
+    else filter['area.availableSqFt'] = trackedArea;
+
+    const set = {
+      'quantity.currentCount': 0,
+      status: 'IN_PROCESSING',
+      activeProcessingJob: processingJobId,
+      updatedBy: authenticatedActor,
+      updatedAt: now,
+    };
+    if (areaSqFt != null) set['area.availableSqFt'] = 0;
+
+    const updatedBatch = await models.InventoryBatchModel.findOneAndUpdate(
+      filter,
+      { $set: set },
+      { new: true, session, runValidators: true },
+    );
+    if (!updatedBatch) {
+      throw new InventoryError('Batch availability changed concurrently.', 409, 'INVENTORY_CONFLICT');
+    }
+
+    const movement = await createDocument(models.InventoryMovementModel, {
+      type: 'PROCESSING_ISSUE',
+      inventoryMode: 'BATCH',
+      batch: updatedBatch._id,
+      quantityDelta: -quantity,
+      areaDeltaSqFt: areaSqFt == null ? 0 : roundArea(-areaSqFt),
+      balanceAfter: compactObject({ quantity: 0, areaSqFt: areaSqFt == null ? undefined : 0 }),
+      fromLocation: plainSubdocument(batch.location),
+      reason: `Issued to processing job ${normalizedJobNumber}.`,
+      actor: authenticatedActor,
+      occurredAt: now,
+      relatedProcessingJobId: processingJobId,
+    }, session);
+
+    return {
+      batch: updatedBatch,
+      slabs: [],
+      movements: [movement],
+      inputSnapshot: compactObject({
+        quantity,
+        areaSqFt,
+        finish: batch.finish,
+        thicknessMm: batch.thicknessMm,
+        dimensions: plainSubdocument(batch.nominalDimensions),
+        sourceLocation: plainSubdocument(batch.location),
+        issuedAt: now,
+      }),
+    };
+  }
+
+  const normalizedSlabIds = slabIds.map((slabId) => requireObjectId(slabId, 'Slab ID'));
+  const uniqueIds = [...new Set(normalizedSlabIds.map(String))];
+  if (!uniqueIds.length) throw new InventoryError('At least one slab is required for processing.');
+  if (uniqueIds.length !== normalizedSlabIds.length) throw new InventoryError('Selected slabs must be unique.');
+
+  const slabs = await findMany(models.SlabModel, {
+    _id: { $in: normalizedSlabIds },
+    batch: batch._id,
+    status: 'AVAILABLE',
+    activeProcessingJob: null,
+    $or: [{ reservation: { $exists: false } }, { reservation: null }],
+  }, session, { slabNumber: 1, _id: 1 });
+  if (!Array.isArray(slabs) || slabs.length !== normalizedSlabIds.length) {
+    throw new InventoryError(
+      'Every selected slab must belong to this batch and be available.',
+      409,
+      'SLAB_UNAVAILABLE',
+    );
+  }
+
+  const areaSqFt = roundArea(slabs.reduce((sum, slab) => sum + slabInventoryArea(slab), 0));
+  const slabUpdate = await models.SlabModel.updateMany(
+    {
+      _id: { $in: normalizedSlabIds },
+      batch: batch._id,
+      status: 'AVAILABLE',
+      activeProcessingJob: null,
+      $or: [{ reservation: { $exists: false } }, { reservation: null }],
+    },
+    {
+      $set: {
+        status: 'IN_PROCESSING',
+        activeProcessingJob: processingJobId,
+        updatedBy: authenticatedActor,
+        updatedAt: now,
+      },
+    },
+    { session, runValidators: true },
+  );
+  if (Number(slabUpdate?.modifiedCount ?? slabUpdate?.nModified) !== slabs.length) {
+    throw new InventoryError('One or more slabs changed concurrently.', 409, 'INVENTORY_CONFLICT');
+  }
+
+  const updatedBatch = await models.InventoryBatchModel.findOneAndUpdate(
+    {
+      _id: batch._id,
+      inventoryMode: 'INDIVIDUAL_SLAB',
+      status: 'AVAILABLE',
+      activeProcessingJob: null,
+      'quantity.currentCount': { $gte: slabs.length },
+      'area.availableSqFt': { $gte: areaSqFt },
+      $expr: {
+        $and: [
+          {
+            $gte: [
+              {
+                $subtract: [
+                  { $ifNull: ['$quantity.currentCount', 0] },
+                  slabs.length,
+                ],
+              },
+              { $ifNull: ['$reservationBalance.quantity', 0] },
+            ],
+          },
+          {
+            $gte: [
+              {
+                $subtract: [
+                  { $ifNull: ['$area.availableSqFt', 0] },
+                  areaSqFt,
+                ],
+              },
+              { $ifNull: ['$reservationBalance.areaSqFt', 0] },
+            ],
+          },
+        ],
+      },
+    },
+    processingIssueBalancePipeline(-slabs.length, -areaSqFt, authenticatedActor),
+    { new: true, session, updatePipeline: true },
+  );
+  if (!updatedBatch) {
+    throw new InventoryError('Batch availability changed concurrently.', 409, 'INVENTORY_CONFLICT');
+  }
+
+  const startQuantity = Number(batch.quantity?.currentCount || 0);
+  const startArea = Number(batch.area?.availableSqFt || 0);
+  let removedArea = 0;
+  const movements = [];
+  for (let index = 0; index < slabs.length; index += 1) {
+    const slab = slabs[index];
+    const slabArea = roundArea(slabInventoryArea(slab));
+    removedArea = roundArea(removedArea + slabArea);
+    movements.push(await createDocument(models.InventoryMovementModel, {
+      type: 'PROCESSING_ISSUE',
+      inventoryMode: 'INDIVIDUAL_SLAB',
+      batch: batch._id,
+      slab: slab._id,
+      quantityDelta: -1,
+      areaDeltaSqFt: -slabArea,
+      balanceAfter: {
+        quantity: startQuantity - index - 1,
+        areaSqFt: roundArea(Math.max(0, startArea - removedArea)),
+      },
+      fromLocation: plainSubdocument(slab.location),
+      reason: `Issued to processing job ${normalizedJobNumber}.`,
+      actor: authenticatedActor,
+      occurredAt: now,
+      relatedProcessingJobId: processingJobId,
+    }, session));
+  }
+
+  return {
+    batch: updatedBatch,
+    slabs,
+    movements,
+    inputSnapshot: {
+      quantity: slabs.length,
+      areaSqFt,
+      finish: batch.finish,
+      thicknessMm: batch.thicknessMm,
+      slabSnapshots: slabs.map((slab) => ({
+        slabId: slab._id,
+        slabNumber: slab.slabNumber,
+        grossAreaSqFt: Number(slab.grossAreaSqFt),
+        usableAreaSqFt: slab.usableAreaSqFt == null ? undefined : Number(slab.usableAreaSqFt),
+        inventoryAreaSqFt: roundArea(slabInventoryArea(slab)),
+        finish: slab.finish || batch.finish,
+        dimensions: plainSubdocument(slab.dimensions),
+        location: plainSubdocument(slab.location),
+      })),
+      issuedAt: now,
+    },
+  };
+}
+
+/**
+ * Returns verified production output to ready inventory. The caller owns the
+ * transaction and supplies the exact source slab selection from the job.
+ */
+export async function returnInventoryFromProcessing({
+  processingJobId,
+  jobNumber,
+  batchId,
+  slabIds = [],
+  verifiedOutput,
+  actor,
+  now = new Date(),
+  models: modelOverrides,
+  session,
+}) {
+  requireProcessingSession(session);
+  requireObjectId(processingJobId, 'Processing job ID');
+  requireObjectId(batchId, 'Batch ID');
+  const authenticatedActor = requireActor(actor);
+  const normalizedJobNumber = requiredString(jobNumber, 'Processing job number', 80);
+  const models = resolveModels(modelOverrides);
+  const batch = await findById(models.InventoryBatchModel, batchId, session);
+  if (!batch) throw new InventoryError('Inventory batch was not found.', 404, 'BATCH_NOT_FOUND');
+
+  const outputQuantity = numberValue(verifiedOutput?.quantity, 'Verified output quantity', { integer: true });
+  const outputArea = numberValue(verifiedOutput?.areaSqFt, 'Verified output area', { optional: true });
+  if (outputQuantity === 0 && Number(outputArea || 0) === 0) {
+    throw new InventoryError('Verified processing output must be greater than zero.');
+  }
+
+  if (batch.inventoryMode === 'BATCH') {
+    if (!idsEqual(batch.activeProcessingJob, processingJobId) || batch.status !== 'IN_PROCESSING') {
+      throw new InventoryError('This batch is not locked by the processing job.', 409, 'PROCESSING_LOCK_MISMATCH');
+    }
+
+    const set = {
+      'quantity.currentCount': outputQuantity,
+      status: 'AVAILABLE',
+      activeProcessingJob: null,
+      updatedBy: authenticatedActor,
+      updatedAt: now,
+    };
+    if (outputArea != null) set['area.availableSqFt'] = roundArea(outputArea);
+    if (verifiedOutput.finish != null) set.finish = verifiedOutput.finish;
+    if (verifiedOutput.thicknessMm != null) set.thicknessMm = verifiedOutput.thicknessMm;
+    if (verifiedOutput.dimensions) {
+      set.nominalDimensions = {
+        lengthMm: verifiedOutput.dimensions.lengthMm,
+        widthMm: verifiedOutput.dimensions.widthMm,
+      };
+    }
+
+    const updatedBatch = await models.InventoryBatchModel.findOneAndUpdate(
+      {
+        _id: batch._id,
+        inventoryMode: 'BATCH',
+        status: 'IN_PROCESSING',
+        activeProcessingJob: processingJobId,
+        'quantity.currentCount': 0,
+      },
+      { $set: set },
+      { new: true, session, runValidators: true },
+    );
+    if (!updatedBatch) {
+      throw new InventoryError('Processing lock changed concurrently.', 409, 'INVENTORY_CONFLICT');
+    }
+
+    const movement = await createDocument(models.InventoryMovementModel, {
+      type: 'PROCESSING_RETURN',
+      inventoryMode: 'BATCH',
+      batch: updatedBatch._id,
+      quantityDelta: outputQuantity,
+      areaDeltaSqFt: outputArea == null ? 0 : roundArea(outputArea),
+      balanceAfter: compactObject({
+        quantity: outputQuantity,
+        areaSqFt: outputArea == null ? undefined : roundArea(outputArea),
+      }),
+      toLocation: plainSubdocument(updatedBatch.location),
+      reason: `Verified output returned from processing job ${normalizedJobNumber}.`,
+      actor: authenticatedActor,
+      occurredAt: now,
+      relatedProcessingJobId: processingJobId,
+    }, session);
+    return { batch: updatedBatch, slabs: [], movements: [movement] };
+  }
+
+  const selectedIds = slabIds.map((slabId) => requireObjectId(slabId, 'Slab ID'));
+  const selectedSet = new Set(selectedIds.map(String));
+  const slabOutputs = verifiedOutput?.slabOutputs || [];
+  const returnedSet = new Set(slabOutputs.map((output) => String(output.slabId)));
+  if (selectedSet.size !== selectedIds.length || returnedSet.size !== slabOutputs.length) {
+    throw new InventoryError('Selected and returned slab IDs must be unique.');
+  }
+  if (slabOutputs.some((output) => !selectedSet.has(String(output.slabId)))) {
+    throw new InventoryError('Verified output contains a slab outside this processing job.');
+  }
+  if (outputQuantity !== slabOutputs.length) {
+    throw new InventoryError('Verified output quantity must match the returned slab list.');
+  }
+
+  const lockedSlabs = await findMany(models.SlabModel, {
+    _id: { $in: selectedIds },
+    batch: batch._id,
+    status: 'IN_PROCESSING',
+    activeProcessingJob: processingJobId,
+  }, session, { slabNumber: 1, _id: 1 });
+  if (!Array.isArray(lockedSlabs) || lockedSlabs.length !== selectedIds.length) {
+    throw new InventoryError('One or more processing slab locks are missing.', 409, 'PROCESSING_LOCK_MISMATCH');
+  }
+
+  const slabById = new Map(lockedSlabs.map((slab) => [String(slab._id), slab]));
+  const normalizedOutputs = slabOutputs.map((output) => {
+    const slab = slabById.get(String(output.slabId));
+    let dimensions = output.dimensions ? { ...plainSubdocument(slab.dimensions), ...output.dimensions } : undefined;
+    if (verifiedOutput.thicknessMm != null) {
+      dimensions = {
+        ...plainSubdocument(slab.dimensions),
+        ...dimensions,
+        thicknessMm: verifiedOutput.thicknessMm,
+      };
+    }
+    const grossAreaSqFt = dimensions?.lengthMm && dimensions?.widthMm
+      ? squareFeetFromMillimetres(dimensions.lengthMm, dimensions.widthMm)
+      : Number(slab.grossAreaSqFt);
+    const usableAreaSqFt = numberValue(output.usableAreaSqFt, 'Returned slab usable area', { positive: true });
+    if (usableAreaSqFt > grossAreaSqFt) {
+      throw new InventoryError('Returned slab usable area cannot exceed its gross area.');
+    }
+    return { slab, output, dimensions, grossAreaSqFt, usableAreaSqFt: roundArea(usableAreaSqFt) };
+  });
+  const calculatedArea = roundArea(normalizedOutputs.reduce((sum, item) => sum + item.usableAreaSqFt, 0));
+  if (outputArea == null || Math.abs(roundArea(outputArea) - calculatedArea) > 0.0001) {
+    throw new InventoryError('Verified output area must equal the returned slab usable-area total.');
+  }
+
+  const updatedSlabs = [];
+  for (const item of normalizedOutputs) {
+    const set = {
+      status: 'AVAILABLE',
+      activeProcessingJob: null,
+      usableAreaSqFt: item.usableAreaSqFt,
+      updatedBy: authenticatedActor,
+      updatedAt: now,
+    };
+    if (item.dimensions) {
+      set.dimensions = item.dimensions;
+      set.grossAreaSqFt = item.grossAreaSqFt;
+    }
+    if (verifiedOutput.finish != null) set.finish = verifiedOutput.finish;
+
+    const updatedSlab = await models.SlabModel.findOneAndUpdate(
+      {
+        _id: item.slab._id,
+        batch: batch._id,
+        status: 'IN_PROCESSING',
+        activeProcessingJob: processingJobId,
+      },
+      { $set: set },
+      { new: true, session, runValidators: true },
+    );
+    if (!updatedSlab) throw new InventoryError('A slab changed concurrently.', 409, 'INVENTORY_CONFLICT');
+    updatedSlabs.push(updatedSlab);
+  }
+
+  const omittedIds = selectedIds.filter((slabId) => !returnedSet.has(String(slabId)));
+  if (omittedIds.length) {
+    const depleted = await models.SlabModel.updateMany(
+      {
+        _id: { $in: omittedIds },
+        batch: batch._id,
+        status: 'IN_PROCESSING',
+        activeProcessingJob: processingJobId,
+      },
+      {
+        $set: {
+          status: 'DEPLETED',
+          activeProcessingJob: null,
+          updatedBy: authenticatedActor,
+          updatedAt: now,
+        },
+      },
+      { session, runValidators: true },
+    );
+    if (Number(depleted?.modifiedCount ?? depleted?.nModified) !== omittedIds.length) {
+      throw new InventoryError('A slab changed concurrently.', 409, 'INVENTORY_CONFLICT');
+    }
+  }
+
+  const updatedBatch = await models.InventoryBatchModel.findOneAndUpdate(
+    { _id: batch._id, inventoryMode: 'INDIVIDUAL_SLAB', status: { $ne: 'ARCHIVED' } },
+    batchBalancePipeline(outputQuantity, calculatedArea, authenticatedActor),
+    { new: true, session, updatePipeline: true },
+  );
+  if (!updatedBatch) throw new InventoryError('Batch changed concurrently.', 409, 'INVENTORY_CONFLICT');
+
+  const startQuantity = Number(batch.quantity?.currentCount || 0);
+  const startArea = Number(batch.area?.availableSqFt || 0);
+  let returnedArea = 0;
+  const movements = [];
+  for (let index = 0; index < updatedSlabs.length; index += 1) {
+    const slab = updatedSlabs[index];
+    const area = normalizedOutputs[index].usableAreaSqFt;
+    returnedArea = roundArea(returnedArea + area);
+    movements.push(await createDocument(models.InventoryMovementModel, {
+      type: 'PROCESSING_RETURN',
+      inventoryMode: 'INDIVIDUAL_SLAB',
+      batch: batch._id,
+      slab: slab._id,
+      quantityDelta: 1,
+      areaDeltaSqFt: area,
+      balanceAfter: {
+        quantity: startQuantity + index + 1,
+        areaSqFt: roundArea(startArea + returnedArea),
+      },
+      toLocation: plainSubdocument(slab.location),
+      reason: `Verified output returned from processing job ${normalizedJobNumber}.`,
+      actor: authenticatedActor,
+      occurredAt: now,
+      relatedProcessingJobId: processingJobId,
+    }, session));
+  }
+  return { batch: updatedBatch, slabs: updatedSlabs, movements };
 }

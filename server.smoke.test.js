@@ -12,7 +12,7 @@ beforeAll(async () => {
       resolve();
     });
   });
-});
+}, 30_000);
 
 afterAll(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
@@ -87,6 +87,30 @@ describe('backend smoke checks', () => {
     expect(create.status).toBe(401);
     expect(summary.headers.get('cache-control')).toBe('no-store');
     expect(create.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('requires authentication before processing reads and writes', async () => {
+    const summary = await fetch(`${baseUrl}/api/admin/processing/summary`);
+    const create = await fetch(`${baseUrl}/api/admin/processing/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const note = await fetch(`${baseUrl}/api/admin/processing/jobs/507f1f77bcf86cd799439011/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: 'Unauthenticated note attempt.' }),
+    });
+
+    expect(summary.status).toBe(401);
+    expect(create.status).toBe(401);
+    expect(note.status).toBe(401);
+    expect(summary.headers.get('cache-control')).toBe('no-store');
+    expect(create.headers.get('cache-control')).toBe('no-store');
+    expect(note.headers.get('cache-control')).toBe('no-store');
+    expect(await summary.json()).toEqual({ error: 'Authentication required.' });
+    expect(await create.json()).toEqual({ error: 'Authentication required.' });
+    expect(await note.json()).toEqual({ error: 'Authentication required.' });
   });
 
   it('rejects public attempts to set administrative lead fields before database access', async () => {

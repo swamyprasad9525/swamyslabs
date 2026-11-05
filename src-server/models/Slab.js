@@ -22,6 +22,13 @@ const locationSchema = new Schema({
   rack: { type: String, trim: true, maxlength: 100 },
 }, { _id: false });
 
+const reservationSchema = new Schema({
+  reservationId: { type: Schema.Types.ObjectId, ref: 'InventoryReservation', required: true },
+  salesOrderId: { type: Schema.Types.ObjectId, ref: 'SalesOrder', required: true },
+  salesOrderLineItemId: { type: Schema.Types.ObjectId, required: true },
+  reservedAt: { type: Date, required: true },
+}, { _id: false });
+
 const slabSchema = new Schema({
   slabNumber: {
     type: String,
@@ -38,8 +45,10 @@ const slabSchema = new Schema({
     index: true,
   },
   stoneRef: { type: stoneRefSchema, required: true, immutable: true },
+  finish: { type: String, trim: true, maxlength: 120 },
   dimensions: { type: dimensionsSchema, required: true },
-  grossAreaSqFt: { type: Number, required: true, min: 0.0001, immutable: true },
+  // Current measured area. Processing input snapshots preserve its prior value.
+  grossAreaSqFt: { type: Number, required: true, min: 0.0001 },
   usableAreaSqFt: { type: Number, min: 0 },
   status: {
     type: String,
@@ -48,6 +57,13 @@ const slabSchema = new Schema({
     default: 'AVAILABLE',
     index: true,
   },
+  activeProcessingJob: {
+    type: Schema.Types.ObjectId,
+    ref: 'ProcessingJob',
+    default: null,
+    index: true,
+  },
+  reservation: { type: reservationSchema, default: undefined },
   location: { type: locationSchema, required: true },
   grade: { type: String, trim: true, maxlength: 100 },
   shade: { type: String, trim: true, maxlength: 100 },
@@ -70,6 +86,8 @@ slabSchema.pre('validate', function validateSlab() {
 
 slabSchema.index({ batch: 1, slabNumber: 1 });
 slabSchema.index({ batch: 1, status: 1, updatedAt: -1 });
+slabSchema.index({ batch: 1, status: 1, 'reservation.reservationId': 1 });
+slabSchema.index({ 'reservation.salesOrderId': 1, status: 1 });
 slabSchema.index({ 'location.warehouse': 1, status: 1 });
 
 const Slab = mongoose.models.Slab || mongoose.model('Slab', slabSchema);
