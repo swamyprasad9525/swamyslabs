@@ -3,20 +3,22 @@ import { INVOICE_RECORD_VERSION } from '../constants/billing.js';
 import Counter from '../models/Counter.js';
 import Invoice from '../models/Invoice.js';
 import InvoiceEvent from '../models/InvoiceEvent.js';
+import Payment from '../models/Payment.js';
 import SalesOrder from '../models/SalesOrder.js';
 import SellerTaxProfile from '../models/SellerTaxProfile.js';
 import { amountInWords } from '../utils/invoiceHelpers.js';
 import { escapeRegex } from '../utils/security.js';
+import { formatInventoryReference } from './inventoryService.js';
 
 const BASIS_POINTS = 10_000n;
 const INDIA_OFFSET_MS = 330 * 60 * 1000;
 const PROFILE_KEY = 'default';
-const GSTIN_PATTERN = /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]Z[A-Z0-9]$/;
 
 const DEFAULT_MODELS = Object.freeze({
   CounterModel: Counter,
   InvoiceModel: Invoice,
   InvoiceEventModel: InvoiceEvent,
+  PaymentModel: Payment,
   SalesOrderModel: SalesOrder,
   SellerTaxProfileModel: SellerTaxProfile,
 });
@@ -42,15 +44,24 @@ function requireActor(actor) {
 }
 
 function requireObjectId(value, label) {
-  if (!mongoose.isValidObjectId(value)) throw new BillingError(label + ' is invalid.', 400, 'INVALID_ID');
+  if (!mongoose.isValidObjectId(value)) throw new BillingError(`${label} is invalid.`, 400, 'INVALID_ID');
   return value;
 }
 
 function plain(value) {
   if (value == null) return value;
-  return typeof value.toObject === 'function'
-    ? value.toObject({ versionKey: false })
-    : structuredClone(value);
+  if (typeof value.toObject === 'function') {
+    return value.toObject({ versionKey: false });
+  }
+  try {
+    return structuredClone(value);
+  } catch {
+    const copy = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (typeof v !== 'function') copy[k] = v;
+    }
+    return copy;
+  }
 }
 
 function transactionUnsupported(error) {
@@ -154,7 +165,7 @@ function roundDivide(numerator, denominator) {
 function safeInteger(value, label, { positive = false } = {}) {
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number < (positive ? 1 : 0)) {
-    throw new BillingError(label + ' is invalid.', 409, 'SOURCE_FINANCIAL_MISMATCH');
+    throw new BillingError(`${label} is invalid.`, 409, 'SOURCE_FINANCIAL_MISMATCH');
   }
   return number;
 }
@@ -162,9 +173,25 @@ function safeInteger(value, label, { positive = false } = {}) {
 function safeAdd(left, right, label) {
   const value = left + right;
   if (!Number.isSafeInteger(value)) {
-    throw new BillingError(label + ' is too large.', 409, 'SOURCE_FINANCIAL_MISMATCH');
+    throw new BillingError(`${label} is too large.`, 409, 'SOURCE_FINANCIAL_MISMATCH');
   }
   return value;
+}
+
+export async function nextBillingReference(prefix = 'INV', date = new Date(), CounterModel = Counter, session = null) {
+  const normalizedPrefix = String(prefix || 'INV').trim().toUpperCase();
+  const indiaTime = new Date(new Date(date).getTime() + INDIA_OFFSET_MS);
+  if (Number.isNaN(indiaTime.getTime())) throw new BillingError('Reference date is invalid.');
+  const year = indiaTime.getUTCFullYear();
+  const options = { new: true, upsert: true };
+  if (session) options.session = session;
+
+  const counter = await CounterModel.findOneAndUpdate(
+    { _id: `${normalizedPrefix.toLowerCase()}_${year}` },
+    { $inc: { seq: 1 } },
+    options,
+  );
+  return formatInventoryReference(normalizedPrefix, date, counter.seq);
 }
 
 /**
@@ -390,7 +417,7 @@ export async function createInvoiceDraft({
       const billingAddress = plain(draft.billingAddress || customer.billingAddress);
       const shippingAddress = plain(draft.shippingAddress || customer.deliveryAddress || billingAddress);
       const invoiceId = new mongoose.Types.ObjectId();
-      const draftReference = 'DRAFT-' + invoiceId.toString().toUpperCase();
+      const draftReference = `DRAFT-${invoiceId.toString().toUpperCase()}`;
       const uniformRates = [...new Set(calculation.items.map((item) => item.taxRateBasisPoints))];
       const invoice = await createDocument(models.InvoiceModel, {
         _id: invoiceId,
@@ -407,7 +434,7 @@ export async function createInvoiceDraft({
         documentStatus: 'DRAFT',
         currency: order.currency,
         dueDate: draft.dueDate,
-        placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
+        placeOfSupplyStateCode: draft.placeOfSupplyStateCode || billingAddress?.stateCode,
         customerIdentitySnapshot: customer,
         billingAddressSnapshot: billingAddress,
         shippingAddressSnapshot: shippingAddress,
@@ -510,4 +537,417 @@ export async function updateInvoiceDraft({
       return { invoice, event };
     },
   });
+}
+
+export async function issueInvoice({
+  invoiceId,
+  issueDate,
+  requestKey,
+  actor,
+  now = new Date(),
+  models: overrides,
+  connection,
+  session = null,
+}) {
+  requireObjectId(invoiceId, 'Invoice ID');
+  const authenticatedActor = requireActor(actor);
+  const models = resolveModels(overrides);
+
+  return runRequiredTransaction({
+    models,
+    connection,
+    session,
+    work: async (activeSession) => {
+      const invoice = await findById(models.InvoiceModel, invoiceId, activeSession);
+      if (!invoice) throw new BillingError('Invoice was not found.', 404, 'INVOICE_NOT_FOUND');
+      if (invoice.recordVersion !== INVOICE_RECORD_VERSION) {
+        throw new BillingError('Historical invoices cannot be issued.', 409, 'LEGACY_INVOICE_UNSUPPORTED');
+      }
+      if (invoice.documentStatus === 'ISSUED') {
+        if (requestKey && invoice.issueRequestKey === requestKey) {
+          return { invoice, duplicate: true };
+        }
+        throw new BillingError('Invoice is already issued.', 409, 'INVOICE_ALREADY_ISSUED');
+      }
+      if (invoice.documentStatus !== 'DRAFT') {
+        throw new BillingError('Only draft invoices can be issued.', 409, 'INVALID_INVOICE_STATE');
+      }
+
+      // Check seller tax profile verification (GST / Legal safety)
+      const profile = await findOne(models.SellerTaxProfileModel, { profileKey: PROFILE_KEY }, activeSession);
+      if (!profile || !profile.verification?.identityVerified) {
+        throw new BillingError(
+          'Seller identity profile is not verified. Please verify legal name, address, GSTIN and registration state before issuing invoices.',
+          400,
+          'TAX_PROFILE_UNVERIFIED',
+        );
+      }
+      if (!profile.legalName || !profile.registeredAddress || !profile.gstin || !profile.stateCode) {
+        throw new BillingError(
+          'Seller tax profile is incomplete. Required: registered business name, address, GSTIN, and registration state code.',
+          400,
+          'SELLER_PROFILE_INCOMPLETE',
+        );
+      }
+
+      // Positive tax requires verified tax rules
+      const hasPositiveTax = (invoice.taxMinor || 0) > 0;
+      if (hasPositiveTax) {
+        if (!profile.verification?.taxRulesVerified) {
+          throw new BillingError(
+            'Tax rules are not verified for positive-tax invoicing. Please verify HSN code and applicable GST rates in Seller Tax Profile.',
+            400,
+            'TAX_PROFILE_UNVERIFIED',
+          );
+        }
+
+        // Verify each line has a matching tax rule in the profile
+        const rules = profile.taxRules || [];
+        for (const item of invoice.itemsV2) {
+          const stoneId = item.stoneSnapshot?.stoneId || item.stoneSnapshot?.id;
+          const slug = item.stoneSnapshot?.slug?.toLowerCase();
+          const matchingRule = rules.find((r) => r.stoneId === stoneId || r.stoneSlug === slug);
+          if (!matchingRule) {
+            throw new BillingError(
+              `Tax rule for stone "${item.stoneSnapshot?.name || item.description}" is not verified in Seller Tax Profile.`,
+              400,
+              'TAX_RULE_MISSING',
+            );
+          }
+          item.hsnCode = matchingRule.hsnCode;
+        }
+      }
+
+      // Determine Place of Supply and Intra-state vs Inter-state
+      const posState = String(invoice.placeOfSupplyStateCode || invoice.billingAddressSnapshot?.stateCode || '').trim();
+      if (!posState) {
+        throw new BillingError('Place of supply state code is required to determine GST tax breakdown.', 400, 'PLACE_OF_SUPPLY_REQUIRED');
+      }
+
+      const isIntraState = profile.stateCode === posState;
+      let taxType = 'NONE';
+      let cgstMinor = 0;
+      let sgstMinor = 0;
+      let igstMinor = 0;
+
+      if (hasPositiveTax) {
+        if (isIntraState) {
+          taxType = 'CGST_SGST';
+          const half = roundDivide(BigInt(invoice.taxMinor), 2n);
+          cgstMinor = Number(half);
+          sgstMinor = invoice.taxMinor - cgstMinor;
+          igstMinor = 0;
+        } else {
+          taxType = 'IGST';
+          igstMinor = invoice.taxMinor;
+          cgstMinor = 0;
+          sgstMinor = 0;
+        }
+      }
+
+      invoice.taxType = taxType;
+      invoice.cgstMinor = cgstMinor;
+      invoice.sgstMinor = sgstMinor;
+      invoice.igstMinor = igstMinor;
+
+      // Update tax breakdown per line rate
+      invoice.taxBreakdownV2 = (invoice.taxBreakdownV2 || []).map((entry) => {
+        const lineTax = entry.taxMinor || 0;
+        if (!hasPositiveTax || lineTax === 0) {
+          return { ...entry, cgstMinor: 0, sgstMinor: 0, igstMinor: 0 };
+        }
+        if (isIntraState) {
+          const lineCgst = Number(roundDivide(BigInt(lineTax), 2n));
+          return { ...entry, cgstMinor: lineCgst, sgstMinor: lineTax - lineCgst, igstMinor: 0 };
+        }
+        return { ...entry, cgstMinor: 0, sgstMinor: 0, igstMinor: lineTax };
+      });
+
+      // Generate official invoice number
+      const effectiveDate = issueDate ? new Date(issueDate) : now;
+      const series = profile.invoiceSeries || 'INV';
+      const officialInvoiceNumber = await nextBillingReference(series, effectiveDate, models.CounterModel, activeSession);
+
+      invoice.invoiceNumber = officialInvoiceNumber;
+      invoice.issueDate = effectiveDate;
+      invoice.taxDate = effectiveDate;
+      invoice.issuedAt = now;
+      invoice.issuedBy = authenticatedActor;
+      invoice.documentStatus = 'ISSUED';
+      if (requestKey) invoice.issueRequestKey = requestKey;
+
+      invoice.sellerIdentitySnapshot = {
+        legalName: profile.legalName,
+        registeredAddress: profile.registeredAddress,
+        gstin: profile.gstin,
+        registrationState: profile.registrationState,
+        stateCode: profile.stateCode,
+        email: profile.email,
+        phone: profile.phone,
+      };
+
+      invoice.seller = {
+        name: profile.legalName,
+        address: profile.registeredAddress,
+        gstin: profile.gstin,
+        stateCode: profile.stateCode,
+        email: profile.email,
+        phone: profile.phone,
+      };
+
+      invoice.lineItems = legacyItems(invoice.itemsV2);
+      invoice.taxAmount = (invoice.taxMinor || 0) / 100;
+      invoice.grandTotal = (invoice.grandTotalMinor || 0) / 100;
+      invoice.amountInWords = amountInWords(invoice.grandTotal);
+      invoice.issuedSnapshot = plain(invoice);
+
+      await invoice.save({ session: activeSession });
+
+      const event = await createDocument(
+        models.InvoiceEventModel,
+        eventFor(invoice, 'INVOICE_ISSUED', authenticatedActor, now, {
+          fromStatus: 'DRAFT',
+          toStatus: 'ISSUED',
+          snapshot: {
+            officialInvoiceNumber,
+            grandTotalMinor: invoice.grandTotalMinor,
+            taxType,
+            taxMinor: invoice.taxMinor,
+            cgstMinor,
+            sgstMinor,
+            igstMinor,
+          },
+        }),
+        activeSession,
+      );
+
+      return { invoice, event, duplicate: false };
+    },
+  });
+}
+
+export async function voidInvoice({
+  invoiceId,
+  reason,
+  actor,
+  now = new Date(),
+  models: overrides,
+  connection,
+  session = null,
+}) {
+  requireObjectId(invoiceId, 'Invoice ID');
+  const authenticatedActor = requireActor(actor);
+  const models = resolveModels(overrides);
+
+  return runRequiredTransaction({
+    models,
+    connection,
+    session,
+    work: async (activeSession) => {
+      const invoice = await findById(models.InvoiceModel, invoiceId, activeSession);
+      if (!invoice) throw new BillingError('Invoice was not found.', 404, 'INVOICE_NOT_FOUND');
+      if (invoice.recordVersion !== INVOICE_RECORD_VERSION) {
+        throw new BillingError('Historical invoices cannot be voided.', 409, 'LEGACY_INVOICE_READ_ONLY');
+      }
+      if (invoice.documentStatus !== 'ISSUED') {
+        throw new BillingError('Only issued invoices can be voided.', 409, 'INVALID_INVOICE_STATE');
+      }
+      if (invoice.paymentSummary?.confirmedMinor > 0) {
+        throw new BillingError(
+          'Cannot void an invoice with confirmed payments. Payments must be reversed first.',
+          409,
+          'INVOICE_HAS_PAYMENTS',
+        );
+      }
+
+      invoice.documentStatus = 'VOID';
+      invoice.updatedBy = authenticatedActor;
+      await invoice.save({ session: activeSession });
+
+      const event = await createDocument(
+        models.InvoiceEventModel,
+        eventFor(invoice, 'INVOICE_VOIDED', authenticatedActor, now, {
+          fromStatus: 'ISSUED',
+          toStatus: 'VOID',
+          snapshot: { reason: reason || 'Voided by administrator' },
+        }),
+        activeSession,
+      );
+
+      return { invoice, event };
+    },
+  });
+}
+
+export async function getInvoiceById({ invoiceId, models: overrides }) {
+  requireObjectId(invoiceId, 'Invoice ID');
+  const models = resolveModels(overrides);
+  const invoice = await models.InvoiceModel.findById(invoiceId).lean();
+  if (!invoice) throw new BillingError('Invoice was not found.', 404, 'INVOICE_NOT_FOUND');
+
+  const [events, payments, salesOrder] = await Promise.all([
+    models.InvoiceEventModel.find({ invoice: invoiceId }).sort({ occurredAt: 1 }).lean(),
+    models.PaymentModel.find({ invoiceId }).sort({ receivedAt: -1, createdAt: -1 }).lean(),
+    invoice.salesOrderId ? models.SalesOrderModel.findById(invoice.salesOrderId).select('salesOrderNumber status customerSnapshot').lean() : null,
+  ]);
+
+  return {
+    invoice,
+    events: events || [],
+    payments: payments || [],
+    salesOrder: salesOrder || null,
+  };
+}
+
+export async function listInvoicesV2(query = {}, { models: overrides } = {}) {
+  const models = resolveModels(overrides);
+  const page = Math.max(1, Number(query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+  const skip = (page - 1) * limit;
+
+  const filter = {};
+
+  if (query.recordType === 'v2') {
+    filter.recordVersion = INVOICE_RECORD_VERSION;
+  } else if (query.recordType === 'legacy') {
+    filter.recordVersion = { $ne: INVOICE_RECORD_VERSION };
+  }
+
+  if (query.documentStatus) {
+    filter.documentStatus = query.documentStatus;
+  }
+
+  if (query.paymentStatus) {
+    filter['paymentSummary.status'] = query.paymentStatus;
+  }
+
+  if (query.salesOrderId) {
+    filter.salesOrderId = query.salesOrderId;
+  }
+
+  if (query.search) {
+    const rx = new RegExp(escapeRegex(query.search), 'i');
+    filter.$or = [
+      { invoiceNumber: rx },
+      { 'customerIdentitySnapshot.name': rx },
+      { 'customerIdentitySnapshot.company': rx },
+      { 'buyer.name': rx },
+      { salesOrderNumber: rx },
+    ];
+  }
+
+  if (query.from || query.to) {
+    filter.invoiceDate = {};
+    if (query.from) filter.invoiceDate.$gte = new Date(query.from);
+    if (query.to) filter.invoiceDate.$lte = new Date(query.to);
+  }
+
+  const [invoices, total] = await Promise.all([
+    models.InvoiceModel.find(filter)
+      .sort({ invoiceDate: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    models.InvoiceModel.countDocuments(filter),
+  ]);
+
+  return {
+    invoices,
+    total,
+    page,
+    pages: Math.ceil(total / limit) || 1,
+  };
+}
+
+export async function getSellerTaxProfile({ models: overrides } = {}) {
+  const models = resolveModels(overrides);
+  const profile = await models.SellerTaxProfileModel.findOne({ profileKey: PROFILE_KEY }).lean();
+  if (profile) return profile;
+
+  return {
+    profileKey: PROFILE_KEY,
+    legalName: '',
+    registeredAddress: '',
+    gstin: '',
+    registrationState: '',
+    stateCode: '',
+    email: '',
+    phone: '',
+    invoiceSeries: 'INV',
+    taxRules: [],
+    verification: {
+      identityVerified: false,
+      taxRulesVerified: false,
+      verificationNote: '',
+    },
+  };
+}
+
+export async function updateSellerTaxProfile({
+  updates,
+  actor,
+  now = new Date(),
+  models: overrides,
+}) {
+  const authenticatedActor = requireActor(actor);
+  const models = resolveModels(overrides);
+
+  const profile = await models.SellerTaxProfileModel.findOneAndUpdate(
+    { profileKey: PROFILE_KEY },
+    {
+      $set: {
+        ...updates,
+        ...(updates.verification ? { 'verification.verifiedAt': now } : {}),
+        updatedBy: authenticatedActor,
+      },
+    },
+    { new: true, upsert: true, runValidators: true },
+  ).lean();
+
+  return profile;
+}
+
+export async function getEligibleSalesOrders({ page = 1, limit = 20, search = '' } = {}, { models: overrides } = {}) {
+  const models = resolveModels(overrides);
+  const parsedPage = Math.max(1, Number(page) || 1);
+  const parsedLimit = Math.min(100, Math.max(1, Number(limit) || 20));
+  const skip = (parsedPage - 1) * parsedLimit;
+
+  // Find sales orders that already have an invoice
+  const existingInvoices = await models.InvoiceModel.find({
+    recordVersion: INVOICE_RECORD_VERSION,
+    documentStatus: { $in: ['DRAFT', 'ISSUED'] },
+  }).select('salesOrderId').lean();
+
+  const invoicedOrderIds = (existingInvoices || []).map((inv) => inv.salesOrderId).filter(Boolean);
+
+  const filter = {
+    _id: { $nin: invoicedOrderIds },
+    status: { $in: ['CONFIRMED', 'IN_PRODUCTION', 'READY_FOR_DISPATCH', 'PARTIALLY_DISPATCHED', 'COMPLETED'] },
+  };
+
+  if (search) {
+    const rx = new RegExp(escapeRegex(search), 'i');
+    filter.$or = [
+      { salesOrderNumber: rx },
+      { 'customerSnapshot.name': rx },
+      { 'customerSnapshot.company': rx },
+    ];
+  }
+
+  const [orders, total] = await Promise.all([
+    models.SalesOrderModel.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parsedLimit)
+      .lean(),
+    models.SalesOrderModel.countDocuments(filter),
+  ]);
+
+  return {
+    orders,
+    total,
+    page: parsedPage,
+    pages: Math.ceil(total / parsedLimit) || 1,
+  };
 }

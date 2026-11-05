@@ -21,10 +21,15 @@ import {
   ShoppingCart,
   Sparkles,
   SquareStack,
+  Truck,
   UserRoundCheck,
   UsersRound,
   Warehouse,
 } from 'lucide-react';
+import {
+  formatBillingMoney,
+  formatBillingNumber,
+} from '../../lib/billing';
 import {
   AdminEmptyState,
   AdminFeedback,
@@ -229,11 +234,33 @@ export default function AdminDashboardPage() {
   const [recentSalesOrders, setRecentSalesOrders] = useState([]);
   const [salesLoading, setSalesLoading] = useState(true);
   const [salesError, setSalesError] = useState('');
+  const [billingDispatchSummary, setBillingDispatchSummary] = useState(null);
+  const [billingDispatchLoading, setBillingDispatchLoading] = useState(true);
 
   const expireSession = useCallback(() => {
     logout();
     navigate('/admin/login', { replace: true });
   }, [logout, navigate]);
+
+  const loadBillingDispatch = useCallback(async () => {
+    setBillingDispatchLoading(true);
+    try {
+      const [payRes, dispRes] = await Promise.all([
+        authFetch('/api/admin/payments?limit=1').catch(() => null),
+        authFetch('/api/admin/dispatches?limit=1').catch(() => null),
+      ]);
+      const payData = payRes?.ok ? await payRes.json() : null;
+      const dispData = dispRes?.ok ? await dispRes.json() : null;
+      setBillingDispatchSummary({
+        payment: payData?.summary || null,
+        dispatch: dispData?.summary || null,
+      });
+    } catch {
+      // Fallback gracefully
+    } finally {
+      setBillingDispatchLoading(false);
+    }
+  }, [authFetch]);
 
   const loadCrm = useCallback(async () => {
     setCrmLoading(true);
@@ -343,7 +370,8 @@ export default function AdminDashboardPage() {
     loadInventory();
     loadProcessing();
     loadSales();
-  }, [loadCrm, loadInventory, loadProcessing, loadSales]);
+    loadBillingDispatch();
+  }, [loadCrm, loadInventory, loadProcessing, loadSales, loadBillingDispatch]);
 
   const stageCounts = useMemo(() => normalizeCountMap(crmDashboard?.byStage), [crmDashboard?.byStage]);
   const recentLeads = Array.isArray(crmDashboard?.recentLeads) ? crmDashboard.recentLeads : [];
@@ -352,7 +380,7 @@ export default function AdminDashboardPage() {
   const costValues = Array.isArray(inventorySummary?.inventoryCostValues)
     ? inventorySummary.inventoryCostValues.filter((item) => item?.currency && Number.isFinite(Number(item.amount)))
     : [];
-  const refreshing = crmLoading || inventoryLoading || processingLoading || salesLoading;
+  const refreshing = crmLoading || inventoryLoading || processingLoading || salesLoading || billingDispatchLoading;
 
   return (
     <AdminPage className="space-y-8">
@@ -364,7 +392,7 @@ export default function AdminDashboardPage() {
           <>
             <button
               type="button"
-              onClick={() => { loadCrm(); loadInventory(); loadProcessing(); loadSales(); }}
+              onClick={() => { loadCrm(); loadInventory(); loadProcessing(); loadSales(); loadBillingDispatch(); }}
               disabled={refreshing}
               className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 text-xs font-bold text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -567,6 +595,62 @@ export default function AdminDashboardPage() {
             </AdminPanel>
           </>
         ) : null}
+      </section>
+
+      {/* ── BILLING, PAYMENTS & PHYSICAL DISPATCH ERP ── */}
+      <section className="space-y-4" aria-labelledby="billing-dispatch-heading">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="billing-dispatch-heading" className="text-lg font-bold text-stone-950">
+              Invoicing, Payments & Physical Dispatch ERP
+            </h2>
+            <p className="mt-0.5 text-xs leading-5 text-stone-500">
+              Financial collections, payment status, lorry gate passes, and inventory stock depletion.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <AdminTextLink to="/admin/invoices">Invoices</AdminTextLink>
+            <span className="text-stone-300">|</span>
+            <AdminTextLink to="/admin/payments">Payments</AdminTextLink>
+            <span className="text-stone-300">|</span>
+            <AdminTextLink to="/admin/dispatch">Gate Passes</AdminTextLink>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <AdminMetricCard
+            label="Confirmed Collections"
+            value={formatBillingMoney(billingDispatchSummary?.payment?.confirmedTotalMinor || 0)}
+            detail={`${billingDispatchSummary?.payment?.confirmedCount || 0} verified transactions`}
+            icon={CircleDollarSign}
+            tone="emerald"
+            to="/admin/payments"
+          />
+          <AdminMetricCard
+            label="Pending Verification"
+            value={formatBillingMoney(billingDispatchSummary?.payment?.pendingTotalMinor || 0)}
+            detail={`${billingDispatchSummary?.payment?.pendingCount || 0} payment entries to verify`}
+            icon={Clock3}
+            tone="amber"
+            to="/admin/payments?status=PENDING_VERIFICATION"
+          />
+          <AdminMetricCard
+            label="Physical Stone Dispatched"
+            value={`${formatBillingNumber(billingDispatchSummary?.dispatch?.totalDispatchedAreaSqFt || 0)} sq.ft`}
+            detail={`${billingDispatchSummary?.dispatch?.dispatchedCount || 0} completed yard dispatches`}
+            icon={PackageCheck}
+            tone="blue"
+            to="/admin/dispatch"
+          />
+          <AdminMetricCard
+            label="Ready for Yard Departure"
+            value={billingDispatchSummary?.dispatch?.readyCount || 0}
+            detail="Staged vehicles awaiting gate pass departure"
+            icon={Truck}
+            tone="stone"
+            to="/admin/dispatch?status=READY_TO_DISPATCH"
+          />
+        </div>
       </section>
     </AdminPage>
   );

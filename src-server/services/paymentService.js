@@ -6,6 +6,7 @@ import {
 } from '../constants/payment.js';
 import Customer from '../models/Customer.js';
 import Invoice from '../models/Invoice.js';
+import InvoiceEvent from '../models/InvoiceEvent.js';
 import Payment from '../models/Payment.js';
 import PaymentEvent from '../models/PaymentEvent.js';
 import { escapeRegex } from '../utils/security.js';
@@ -13,6 +14,7 @@ import { escapeRegex } from '../utils/security.js';
 const DEFAULT_MODELS = Object.freeze({
   CustomerModel: Customer,
   InvoiceModel: Invoice,
+  InvoiceEventModel: InvoiceEvent,
   PaymentModel: Payment,
   PaymentEventModel: PaymentEvent,
 });
@@ -164,24 +166,15 @@ async function createDocument(Model, value, session) {
 
 function normalizeInvoicePaymentSummary(invoice) {
   const grandTotalMinor = Number(invoice?.grandTotalMinor);
-  const confirmedMinor = Number(invoice?.paymentSummary?.confirmedMinor);
-  const outstandingMinor = Number(invoice?.paymentSummary?.outstandingMinor);
-  const status = invoice?.paymentSummary?.status;
+  const confirmedMinor = Number(invoice?.paymentSummary?.confirmedMinor ?? 0);
+  const outstandingMinor = Number(invoice?.paymentSummary?.outstandingMinor ?? grandTotalMinor);
+  const status = invoice?.paymentSummary?.status ?? 'UNPAID';
+
   if (!Number.isSafeInteger(grandTotalMinor) || grandTotalMinor < 0
     || !Number.isSafeInteger(confirmedMinor) || confirmedMinor < 0
     || !Number.isSafeInteger(outstandingMinor) || outstandingMinor < 0
     || confirmedMinor + outstandingMinor !== grandTotalMinor
     || !INVOICE_PAYMENT_STATUSES.includes(status)) {
-    throw new PaymentError(
-      'Invoice payment data is not ready for payment processing.',
-      409,
-      'INVOICE_PAYMENT_DATA_INVALID',
-    );
-  }
-  const expectedStatus = confirmedMinor === 0
-    ? 'UNPAID'
-    : outstandingMinor === 0 ? 'PAID' : 'PARTIALLY_PAID';
-  if (status !== expectedStatus) {
     throw new PaymentError(
       'Invoice payment data is not ready for payment processing.',
       409,
@@ -202,7 +195,7 @@ function requireEligibleInvoice(invoice, { customerId, currency = 'INR' } = {}) 
   if (invoice.currency !== currency) {
     throw new PaymentError('Payment currency does not match the invoice.', 409, 'PAYMENT_CURRENCY_MISMATCH');
   }
-  if (!invoice.customerId || !idsEqual(invoice.customerId, customerId)) {
+  if (customerId && (!invoice.customerId || !idsEqual(invoice.customerId, customerId))) {
     throw new PaymentError('Payment customer does not match the invoice.', 409, 'PAYMENT_CUSTOMER_MISMATCH');
   }
   return normalizeInvoicePaymentSummary(invoice);
@@ -224,7 +217,7 @@ function samePaymentIntent(payment, input) {
     && String(payment.referenceNumber || '') === String(input.referenceNumber || '');
 }
 
-function derivePaymentSummary(grandTotalMinor, confirmedMinor) {
+export function derivePaymentSummary(grandTotalMinor, confirmedMinor) {
   if (!Number.isSafeInteger(grandTotalMinor) || grandTotalMinor < 0
     || !Number.isSafeInteger(confirmedMinor) || confirmedMinor < 0) {
     throw new PaymentError('Payment totals are invalid.', 409, 'PAYMENT_TOTALS_INVALID');
@@ -264,7 +257,14 @@ async function updateInvoicePaymentSummary({ models, invoice, summary, session }
       currency: invoice.currency,
       grandTotalMinor: invoice.grandTotalMinor,
     },
-    { $set: { paymentSummary: summary } },
+    {
+      $set: {
+        paymentSummary: {
+          ...summary,
+          lastReconciledAt: new Date(),
+        },
+      },
+    },
     { new: true, runValidators: true, session },
   );
   if (!updated) {
@@ -340,6 +340,7 @@ export async function createPayment({
         status: 'PENDING_VERIFICATION',
         createdBy: authenticatedActor,
       }, activeSession);
+
       await appendPaymentEvent(models, {
         paymentId: payment._id,
         invoiceId: normalized.invoiceId,
@@ -356,6 +357,7 @@ export async function createPayment({
         actor: authenticatedActor,
         occurredAt: new Date(now),
       }, activeSession);
+
       return { payment: plain(payment), idempotent: false };
     },
   });
@@ -364,7 +366,7 @@ export async function createPayment({
     return await operation();
   } catch (error) {
     if (error?.code !== 11000) throw error;
-    const existing = await findOne(models.PaymentModel, {
+    const existing = await models.PaymentModel.findOne({
       invoiceId: normalized.invoiceId,
       requestKey: normalized.requestKey,
     });
@@ -373,4 +375,306 @@ export async function createPayment({
     }
     throw new PaymentError('Payment request key is already used for different data.', 409, 'IDEMPOTENCY_CONFLICT');
   }
+}
+
+export async function confirmPayment({
+  paymentId,
+  note,
+  actor,
+  now = new Date(),
+  models: modelOverrides,
+  connection,
+  session,
+}) {
+  requireObjectId(paymentId, 'Payment ID');
+  const authenticatedActor = requireActor(actor);
+  const models = resolveModels(modelOverrides);
+
+  return runRequiredPaymentTransaction({
+    models,
+    connection,
+    session,
+    work: async (activeSession) => {
+      const payment = await findById(models.PaymentModel, paymentId, activeSession);
+      if (!payment) throw new PaymentError('Payment was not found.', 404, 'PAYMENT_NOT_FOUND');
+      if (payment.status === 'CONFIRMED') {
+        return { payment: plain(payment), alreadyConfirmed: true };
+      }
+      if (payment.status !== 'PENDING_VERIFICATION') {
+        throw new PaymentError(`Payment in ${payment.status} status cannot be confirmed.`, 409, 'INVALID_PAYMENT_STATE');
+      }
+
+      const invoice = await findById(models.InvoiceModel, payment.invoiceId, activeSession);
+      requireEligibleInvoice(invoice, { customerId: payment.customerId, currency: payment.currency });
+
+      // Sum existing confirmed payments + this payment
+      const existingConfirmed = await confirmedPaymentTotal(models.PaymentModel, payment.invoiceId, activeSession);
+      const newConfirmedTotal = existingConfirmed + payment.amountMinor;
+
+      if (newConfirmedTotal > invoice.grandTotalMinor) {
+        throw new PaymentError('Payment would exceed the invoice outstanding amount.', 409, 'PAYMENT_OVERPAYMENT');
+      }
+
+      const summary = derivePaymentSummary(invoice.grandTotalMinor, newConfirmedTotal);
+
+      payment.status = 'CONFIRMED';
+      payment.confirmedAt = now;
+      payment.confirmedBy = authenticatedActor;
+      if (note) payment.confirmationNote = note;
+      await payment.save({ session: activeSession });
+
+      await updateInvoicePaymentSummary({ models, invoice, summary, session: activeSession });
+
+      await appendPaymentEvent(models, {
+        paymentId: payment._id,
+        invoiceId: payment.invoiceId,
+        customerId: payment.customerId,
+        type: 'PAYMENT_CONFIRMED',
+        fromStatus: 'PENDING_VERIFICATION',
+        toStatus: 'CONFIRMED',
+        amountMinor: payment.amountMinor,
+        currency: payment.currency,
+        paymentSummary: summary,
+        actor: authenticatedActor,
+        occurredAt: new Date(now),
+        ...(note ? { note } : {}),
+      }, activeSession);
+
+      if (models.InvoiceEventModel) {
+        await createDocument(models.InvoiceEventModel, {
+          invoice: invoice._id,
+          invoiceNumber: invoice.invoiceNumber,
+          type: 'PAYMENT_BALANCE_UPDATED',
+          actor: authenticatedActor,
+          occurredAt: new Date(now),
+          snapshot: {
+            paymentId: payment._id,
+            action: 'CONFIRMED',
+            amountMinor: payment.amountMinor,
+            confirmedMinor: summary.confirmedMinor,
+            outstandingMinor: summary.outstandingMinor,
+            paymentStatus: summary.status,
+          },
+        }, activeSession);
+      }
+
+      return { payment: plain(payment), summary };
+    },
+  });
+}
+
+export async function rejectPayment({
+  paymentId,
+  reason,
+  actor,
+  now = new Date(),
+  models: modelOverrides,
+  connection,
+  session,
+}) {
+  requireObjectId(paymentId, 'Payment ID');
+  const authenticatedActor = requireActor(actor);
+  const rejectionReason = requireText(reason, 'Rejection reason', 1000);
+  const models = resolveModels(modelOverrides);
+
+  return runRequiredPaymentTransaction({
+    models,
+    connection,
+    session,
+    work: async (activeSession) => {
+      const payment = await findById(models.PaymentModel, paymentId, activeSession);
+      if (!payment) throw new PaymentError('Payment was not found.', 404, 'PAYMENT_NOT_FOUND');
+      if (payment.status === 'REJECTED') {
+        return { payment: plain(payment), alreadyRejected: true };
+      }
+      if (payment.status !== 'PENDING_VERIFICATION') {
+        throw new PaymentError(`Payment in ${payment.status} status cannot be rejected.`, 409, 'INVALID_PAYMENT_STATE');
+      }
+
+      payment.status = 'REJECTED';
+      payment.rejectedAt = now;
+      payment.rejectedBy = authenticatedActor;
+      payment.rejectionReason = rejectionReason;
+      await payment.save({ session: activeSession });
+
+      await appendPaymentEvent(models, {
+        paymentId: payment._id,
+        invoiceId: payment.invoiceId,
+        customerId: payment.customerId,
+        type: 'PAYMENT_REJECTED',
+        fromStatus: 'PENDING_VERIFICATION',
+        toStatus: 'REJECTED',
+        amountMinor: payment.amountMinor,
+        currency: payment.currency,
+        actor: authenticatedActor,
+        occurredAt: new Date(now),
+        note: rejectionReason,
+      }, activeSession);
+
+      return { payment: plain(payment) };
+    },
+  });
+}
+
+export async function reversePayment({
+  paymentId,
+  reason,
+  actor,
+  now = new Date(),
+  models: modelOverrides,
+  connection,
+  session,
+}) {
+  requireObjectId(paymentId, 'Payment ID');
+  const authenticatedActor = requireActor(actor);
+  const reversalReason = requireText(reason, 'Reversal reason', 1000);
+  const models = resolveModels(modelOverrides);
+
+  return runRequiredPaymentTransaction({
+    models,
+    connection,
+    session,
+    work: async (activeSession) => {
+      const payment = await findById(models.PaymentModel, paymentId, activeSession);
+      if (!payment) throw new PaymentError('Payment was not found.', 404, 'PAYMENT_NOT_FOUND');
+      if (payment.status === 'REVERSED') {
+        return { payment: plain(payment), alreadyReversed: true };
+      }
+      if (payment.status !== 'CONFIRMED') {
+        throw new PaymentError('Only confirmed payments can be reversed.', 409, 'INVALID_PAYMENT_STATE');
+      }
+
+      const invoice = await findById(models.InvoiceModel, payment.invoiceId, activeSession);
+      requireEligibleInvoice(invoice, { customerId: payment.customerId, currency: payment.currency });
+
+      payment.status = 'REVERSED';
+      payment.reversedAt = now;
+      payment.reversedBy = authenticatedActor;
+      payment.reversalReason = reversalReason;
+      await payment.save({ session: activeSession });
+
+      // Re-sum remaining confirmed payments (excludes this reversed payment)
+      const newConfirmedTotal = await confirmedPaymentTotal(models.PaymentModel, payment.invoiceId, activeSession);
+      const summary = derivePaymentSummary(invoice.grandTotalMinor, newConfirmedTotal);
+
+      await updateInvoicePaymentSummary({ models, invoice, summary, session: activeSession });
+
+      await appendPaymentEvent(models, {
+        paymentId: payment._id,
+        invoiceId: payment.invoiceId,
+        customerId: payment.customerId,
+        type: 'PAYMENT_REVERSED',
+        fromStatus: 'CONFIRMED',
+        toStatus: 'REVERSED',
+        amountMinor: payment.amountMinor,
+        currency: payment.currency,
+        paymentSummary: summary,
+        actor: authenticatedActor,
+        occurredAt: new Date(now),
+        note: reversalReason,
+      }, activeSession);
+
+      if (models.InvoiceEventModel) {
+        await createDocument(models.InvoiceEventModel, {
+          invoice: invoice._id,
+          invoiceNumber: invoice.invoiceNumber,
+          type: 'PAYMENT_BALANCE_UPDATED',
+          actor: authenticatedActor,
+          occurredAt: new Date(now),
+          snapshot: {
+            paymentId: payment._id,
+            action: 'REVERSED',
+            amountMinor: payment.amountMinor,
+            confirmedMinor: summary.confirmedMinor,
+            outstandingMinor: summary.outstandingMinor,
+            paymentStatus: summary.status,
+            reversalReason,
+          },
+        }, activeSession);
+      }
+
+      return { payment: plain(payment), summary };
+    },
+  });
+}
+
+export async function getPaymentById({ paymentId, models: overrides }) {
+  requireObjectId(paymentId, 'Payment ID');
+  const models = resolveModels(overrides);
+  const payment = await models.PaymentModel.findById(paymentId).lean();
+  if (!payment) throw new PaymentError('Payment was not found.', 404, 'PAYMENT_NOT_FOUND');
+
+  const [events, invoice] = await Promise.all([
+    models.PaymentEventModel.find({ paymentId }).sort({ occurredAt: 1 }).lean(),
+    models.InvoiceModel.findById(payment.invoiceId).select('invoiceNumber grandTotalMinor documentStatus paymentSummary').lean(),
+  ]);
+
+  return { payment, events: events || [], invoice };
+}
+
+export async function listPayments(query = {}, { models: overrides } = {}) {
+  const models = resolveModels(overrides);
+  const page = Math.max(1, Number(query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+  const skip = (page - 1) * limit;
+
+  const filter = {};
+  if (query.status) filter.status = query.status;
+  if (query.method) filter.method = query.method;
+  if (query.invoiceId) filter.invoiceId = query.invoiceId;
+  if (query.customerId) filter.customerId = query.customerId;
+
+  if (query.search) {
+    const rx = new RegExp(escapeRegex(query.search), 'i');
+    filter.$or = [
+      { invoiceNumber: rx },
+      { referenceNumber: rx },
+      { 'customerSnapshot.name': rx },
+      { 'customerSnapshot.company': rx },
+    ];
+  }
+
+  if (query.from || query.to) {
+    filter.receivedAt = {};
+    if (query.from) filter.receivedAt.$gte = new Date(query.from);
+    if (query.to) filter.receivedAt.$lte = new Date(query.to);
+  }
+
+  const [payments, total] = await Promise.all([
+    models.PaymentModel.find(filter)
+      .sort({ receivedAt: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    models.PaymentModel.countDocuments(filter),
+  ]);
+
+  return {
+    payments,
+    total,
+    page,
+    pages: Math.ceil(total / limit) || 1,
+  };
+}
+
+export async function getPaymentSummaryMetrics({ models: overrides } = {}) {
+  const models = resolveModels(overrides);
+
+  const [confirmedAgg, pendingAgg] = await Promise.all([
+    models.PaymentModel.aggregate([
+      { $match: { status: 'CONFIRMED' } },
+      { $group: { _id: null, totalMinor: { $sum: '$amountMinor' }, count: { $sum: 1 } } },
+    ]),
+    models.PaymentModel.aggregate([
+      { $match: { status: 'PENDING_VERIFICATION' } },
+      { $group: { _id: null, totalMinor: { $sum: '$amountMinor' }, count: { $sum: 1 } } },
+    ]),
+  ]);
+
+  return {
+    confirmedTotalMinor: confirmedAgg[0]?.totalMinor || 0,
+    confirmedCount: confirmedAgg[0]?.count || 0,
+    pendingTotalMinor: pendingAgg[0]?.totalMinor || 0,
+    pendingCount: pendingAgg[0]?.count || 0,
+  };
 }

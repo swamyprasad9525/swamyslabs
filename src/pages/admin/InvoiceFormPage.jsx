@@ -1,14 +1,13 @@
-import React, { useState, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAdmin } from '../../context/AdminContext';
 import InvoicePrint from '../../components/admin/InvoicePrint';
 import { PREMIUM_STONES } from '../../data/stones';
 import { INDIAN_GST_STATES, getStateCodeByName } from '../../data/gstStates';
 import { 
   FileText, Plus, Trash2, Eye, Save, X, Sparkles, CheckCircle, 
-  Truck, Building, MapPin, Calculator
+  Truck, Building, MapPin, Calculator, PackageCheck, AlertCircle
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 // ── Client-side helpers ───────────────────────────────────────────────────────
 
@@ -132,11 +131,115 @@ const defaultForm = {
 export default function InvoiceFormPage() {
   const { authFetch, logout } = useAdmin();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialSalesOrderId = searchParams.get('salesOrderId') || '';
+
+  const [mode, setMode] = useState('sales_order');
+  const [eligibleOrders, setEligibleOrders] = useState([]);
+  const [selectedSalesOrderId, setSelectedSalesOrderId] = useState(initialSalesOrderId);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [loadingOrderDetails, setLoadingOrderDetails] = useState(false);
+  const [taxProfile, setTaxProfile] = useState(null);
+  const [v2DueDate, setV2DueDate] = useState('');
+  const [v2PlaceOfSupply, setV2PlaceOfSupply] = useState('37');
+  const [v2Notes, setV2Notes] = useState('');
+  const [v2Terms, setV2Terms] = useState('');
 
   const [form, setForm] = useState(defaultForm);
   const [showPreview, setShowPreview] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Fetch eligible sales orders and seller tax profile
+  useEffect(() => {
+    async function loadMeta() {
+      setLoadingOrders(true);
+      try {
+        const [ordersRes, taxRes] = await Promise.all([
+          authFetch('/api/admin/invoices/eligible-orders'),
+          authFetch('/api/admin/invoices/tax-profile').catch(() => null),
+        ]);
+        if (ordersRes.ok) {
+          const data = await ordersRes.json();
+          setEligibleOrders(data.orders || []);
+        }
+        if (taxRes && taxRes.ok) {
+          const taxData = await taxRes.json();
+          setTaxProfile(taxData.profile || null);
+        }
+      } catch {
+        // Fallback gracefully
+      } finally {
+        setLoadingOrders(false);
+      }
+    }
+    loadMeta();
+  }, [authFetch]);
+
+  // Fetch selected sales order details
+  useEffect(() => {
+    if (!selectedSalesOrderId) {
+      setSelectedOrderDetails(null);
+      return;
+    }
+    async function loadOrder() {
+      setLoadingOrderDetails(true);
+      try {
+        const res = await authFetch(`/api/admin/sales-orders/${encodeURIComponent(selectedSalesOrderId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSelectedOrderDetails(data.salesOrder || null);
+          if (data.salesOrder?.customerSnapshot?.shippingAddress?.stateCode) {
+            setV2PlaceOfSupply(data.salesOrder.customerSnapshot.shippingAddress.stateCode);
+          } else if (data.salesOrder?.customerSnapshot?.billingAddress?.stateCode) {
+            setV2PlaceOfSupply(data.salesOrder.customerSnapshot.billingAddress.stateCode);
+          }
+        }
+      } catch {
+        // Handle error gracefully
+      } finally {
+        setLoadingOrderDetails(false);
+      }
+    }
+    loadOrder();
+  }, [authFetch, selectedSalesOrderId]);
+
+  const handleV2Submit = async (e) => {
+    e.preventDefault();
+    if (!selectedSalesOrderId) {
+      setError('Please select an eligible Sales Order.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const requestKey = globalThis.crypto?.randomUUID?.() || `req-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+      const payload = {
+        salesOrderId: selectedSalesOrderId,
+        requestKey,
+      };
+      if (v2DueDate) payload.dueDate = v2DueDate;
+      if (v2PlaceOfSupply) payload.placeOfSupplyStateCode = v2PlaceOfSupply;
+      if (v2Notes.trim()) payload.notes = v2Notes.trim();
+      if (v2Terms.trim()) payload.terms = v2Terms.trim();
+
+      const res = await authFetch('/api/admin/invoices/drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.status === 401) { logout(); return; }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create invoice draft');
+      navigate(`/admin/invoices/${data.invoice._id}`);
+    } catch (err) {
+      setError(err.message || 'Failed to create invoice draft');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // ── Computations ──────────────────────────────────────────────────────────
   const computedItems = form.lineItems.map(it => {
@@ -215,7 +318,7 @@ export default function InvoiceFormPage() {
   };
 
   // ── Validation ────────────────────────────────────────────────────────────
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     if (!form.invoiceDate) return 'Invoice Date is required.';
     if (!form.buyer.name) return 'Bill To Buyer Name is required.';
     if (!form.sameAsbuyer && !form.consignee.name) return 'Ship To Consignee Name is required.';
@@ -227,7 +330,7 @@ export default function InvoiceFormPage() {
       if (!it.rate || Number(it.rate) <= 0) return `Line Item #${i + 1} Rate must be greater than 0.`;
     }
     return null;
-  };
+  }, [form]);
 
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async (e) => {
@@ -268,7 +371,7 @@ export default function InvoiceFormPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [form, authFetch, logout, navigate]);
+  }, [form, authFetch, logout, navigate, validateForm]);
 
   const fmt = (n) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -327,7 +430,6 @@ export default function InvoiceFormPage() {
   const labelClass = "text-[11px] font-bold text-stone-600 flex items-center gap-1 uppercase tracking-wider mb-1.5";
   const inputClass = "w-full px-3.5 py-2 border border-stone-300 rounded-xl text-xs focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none bg-white text-stone-900 transition-all font-medium";
   const redDot = <span className="text-rose-500 font-bold ml-0.5">●</span>;
-  const greenDot = <span className="text-emerald-500 font-bold ml-0.5">●</span>;
 
   return (
     <div className="min-h-screen bg-stone-100 font-sans pb-28">
@@ -354,6 +456,213 @@ export default function InvoiceFormPage() {
           </div>
         </div>
 
+        {/* Mode Selector */}
+        <div className="flex justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => { setMode('sales_order'); setError(''); }}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              mode === 'sales_order'
+                ? 'bg-amber-500 text-stone-950 shadow-md ring-2 ring-amber-400'
+                : 'bg-white text-stone-700 hover:bg-stone-50 border border-stone-200 shadow-sm'
+            }`}
+          >
+            <PackageCheck className="w-4 h-4" />
+            <span>Create from Sales Order (Recommended V2 ERP)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode('manual'); setError(''); }}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              mode === 'manual'
+                ? 'bg-amber-500 text-stone-950 shadow-md ring-2 ring-amber-400'
+                : 'bg-white text-stone-700 hover:bg-stone-50 border border-stone-200 shadow-sm'
+            }`}
+          >
+            <Calculator className="w-4 h-4" />
+            <span>Manual / Ad-Hoc Invoice (Legacy Generator)</span>
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-xs font-bold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* ── MODE 1: V2 SALES ORDER DRAFT GENERATOR ── */}
+        {mode === 'sales_order' && (
+          <form onSubmit={handleV2Submit} className="space-y-6">
+            <div className={cardClass}>
+              <div className={boxHeaderClass}>
+                <span className="flex items-center gap-2">
+                  <PackageCheck className="w-4 h-4 text-amber-400" />
+                  <span>1. Select Confirmed Commercial Sales Order</span>
+                </span>
+                <span className="text-[10px] text-amber-400 font-bold uppercase tracking-widest bg-stone-900 px-2.5 py-1 rounded-md">
+                  V2 ERP
+                </span>
+              </div>
+
+              <div className={boxBodyClass}>
+                {initialSalesOrderId && selectedOrderDetails ? (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-4">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-800">
+                      Pre-selected Sales Order
+                    </span>
+                    <p className="text-base font-bold font-mono text-stone-950">
+                      {selectedOrderDetails.salesOrderNumber || initialSalesOrderId}
+                    </p>
+                    <p className="text-xs text-stone-700 mt-1">
+                      Customer: <span className="font-bold">{selectedOrderDetails.customerSnapshot?.name || 'Customer'}</span>
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className={labelClass}>Choose Confirmed Sales Order {redDot}</label>
+                    <select
+                      className={inputClass}
+                      value={selectedSalesOrderId}
+                      onChange={(e) => setSelectedSalesOrderId(e.target.value)}
+                      disabled={loadingOrders}
+                      required
+                    >
+                      <option value="">-- Select an eligible order --</option>
+                      {eligibleOrders.map((ord) => (
+                        <option key={ord._id} value={ord._id}>
+                          {ord.salesOrderNumber} — {ord.customerSnapshot?.name || 'Customer'} (Total: ₹{((ord.grandTotalMinor || 0) / 100).toLocaleString('en-IN')})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {loadingOrderDetails && (
+                  <div className="p-4 text-center text-xs text-stone-500 animate-pulse font-medium">
+                    Loading sales order lines & address details...
+                  </div>
+                )}
+
+                {selectedOrderDetails && (
+                  <div className="mt-4 space-y-4">
+                    <div className="border border-stone-200 rounded-xl overflow-hidden">
+                      <div className="bg-stone-50 px-4 py-2 border-b border-stone-200 font-bold text-xs text-stone-700">
+                        Order Stone Line Items
+                      </div>
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-stone-100 text-stone-600 font-bold">
+                          <tr>
+                            <th className="px-4 py-2">Stone & Finish</th>
+                            <th className="px-4 py-2">Thickness</th>
+                            <th className="px-4 py-2">Quantity</th>
+                            <th className="px-4 py-2 text-right">Unit Price</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-100 font-medium">
+                          {(selectedOrderDetails.items || []).map((it, idx) => (
+                            <tr key={it._id || idx}>
+                              <td className="px-4 py-2 font-bold text-stone-900">
+                                {it.stoneSnapshot?.name || 'Stone'}
+                                {it.surfaceFinish && <span className="text-[11px] text-stone-500 block">Finish: {it.surfaceFinish}</span>}
+                              </td>
+                              <td className="px-4 py-2">{it.thicknessMm ? `${it.thicknessMm} mm` : '—'}</td>
+                              <td className="px-4 py-2 font-mono">{it.areaSqFt ? `${it.areaSqFt} sq.ft` : `${it.quantity} ${it.unit || ''}`}</td>
+                              <td className="px-4 py-2 text-right font-mono font-bold">
+                                ₹{((it.unitPriceMinor || 0) / 100).toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelClass}>Due Date (Optional)</label>
+                        <input
+                          type="date"
+                          value={v2DueDate}
+                          onChange={(e) => setV2DueDate(e.target.value)}
+                          className={inputClass}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>Place of Supply State Code (2-digit)</label>
+                        <input
+                          type="text"
+                          maxLength={2}
+                          placeholder="e.g. 37 for Andhra Pradesh"
+                          value={v2PlaceOfSupply}
+                          onChange={(e) => setV2PlaceOfSupply(e.target.value)}
+                          className={inputClass}
+                        />
+                        <p className="text-[11px] text-stone-500 mt-1">
+                          Determines intra-state (CGST + SGST) vs inter-state (IGST).
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Invoice Notes (Optional)</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Internal or billing notes..."
+                        value={v2Notes}
+                        onChange={(e) => setV2Notes(e.target.value)}
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Payment Terms (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Net 15 days, 100% against delivery"
+                        value={v2Terms}
+                        onChange={(e) => setV2Terms(e.target.value)}
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {taxProfile && !taxProfile.verification?.identityVerified && (
+              <div className="bg-amber-50 border border-amber-300 p-4 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Seller Tax Profile Verification Notice</p>
+                  <p className="mt-0.5 text-amber-800">
+                    You can create this draft now. However, official invoice issuance will require verifying the Seller GST identity in Settings.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <Link
+                to="/admin/invoices"
+                className="bg-white border border-stone-300 text-stone-700 px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-stone-50 no-underline shadow-sm"
+              >
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                disabled={submitting || !selectedSalesOrderId}
+                className="bg-amber-500 hover:bg-amber-400 text-stone-950 px-6 py-2.5 rounded-xl font-black text-xs shadow-md disabled:opacity-50 flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                <span>{submitting ? 'Creating Draft...' : 'Create Invoice Draft'}</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* ── MODE 2: LEGACY MANUAL INVOICE GENERATOR ── */}
+        {mode === 'manual' && (
         <form onSubmit={handleSubmit} className="space-y-6">
 
           {/* ── 1. TRANSACTION DETAILS ────────────────────────────────────────── */}
@@ -789,6 +1098,7 @@ export default function InvoiceFormPage() {
           </div>
 
         </form>
+        )}
       </div>
     </div>
   );

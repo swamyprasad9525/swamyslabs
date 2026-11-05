@@ -4,15 +4,20 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Ban,
+  Banknote,
   Boxes,
+  CheckCircle2,
   ExternalLink,
   Factory,
+  FileText,
   History,
   PackageCheck,
+  Printer,
   RefreshCw,
   Search,
   ShieldCheck,
   ShoppingCart,
+  Truck,
   Unlink,
   UserRound,
 } from 'lucide-react';
@@ -121,6 +126,8 @@ export default function SalesOrderDetailPage() {
   const [events, setEvents] = useState([]);
   const [reservations, setReservations] = useState([]);
   const [processingJobs, setProcessingJobs] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [dispatches, setDispatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -157,6 +164,8 @@ export default function SalesOrderDetailPage() {
       setEvents(Array.isArray(data.events) ? data.events : []);
       setReservations(Array.isArray(data.reservations) ? data.reservations : []);
       setProcessingJobs(Array.isArray(data.processingJobs) ? data.processingJobs : []);
+      setInvoices(Array.isArray(data.invoices) ? data.invoices : []);
+      setDispatches(Array.isArray(data.dispatches) ? data.dispatches : []);
     } catch (requestError) {
       setError(requestError.message || 'Unable to load this sales order.');
     } finally {
@@ -685,6 +694,155 @@ export default function SalesOrderDetailPage() {
           />
         )}
         {links.length === 0 ? <p className="py-8 text-center text-sm text-stone-500">No processing job is linked to this order.</p> : <div className="space-y-3">{links.map((link) => { const linkedValue = link.processingJobId; const jobId = linkedValue?._id || linkedValue; const job = (typeof linkedValue === 'object' && linkedValue) || processingJobs.find((entry) => String(entry._id) === String(jobId)); return <div key={link._id || `${link.lineItemId}-${jobId}`} className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><Link to={`/admin/processing/jobs/${jobId}`} className="font-mono text-xs font-black text-amber-800">{job?.jobNumber || String(jobId)}</Link><p className="mt-1 text-xs text-stone-500">Linked {formatCommercialDate(link.linkedAt, { includeTime: true })}</p></div>{canLinkProcessing && order.status !== 'CANCELLED' && <button type="button" disabled={Boolean(busy)} onClick={() => unlinkProcessing(jobId)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-stone-300 px-4 text-xs font-black text-stone-700 disabled:opacity-50"><Unlink className="h-4 w-4" aria-hidden="true" /> Unlink</button>}</div>; })}</div>}
+      </Section>
+
+      <Section
+        icon={FileText}
+        title="Commercial Invoicing & Billing"
+        description="Official GST invoices and customer payment tracking linked to this sales order."
+        action={
+          order.status === 'CONFIRMED' && !invoices.some((inv) => inv.documentStatus !== 'VOID') && (
+            <Link
+              to={`/admin/invoices/new?salesOrderId=${order._id}`}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-amber-500 px-3.5 text-xs font-bold text-stone-950 no-underline shadow-sm hover:bg-amber-400"
+            >
+              <FileText className="h-4 w-4" />
+              Create Invoice Draft
+            </Link>
+          )
+        }
+      >
+        {invoices.length === 0 ? (
+          <div className="py-6 text-center text-xs text-stone-500">
+            No invoice draft has been created for this sales order yet.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {invoices.map((inv) => (
+              <article key={inv._id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/admin/invoices/${inv._id}`}
+                      className="font-mono text-xs font-black text-amber-800 hover:underline"
+                    >
+                      {inv.invoiceNumber || inv._id}
+                    </Link>
+                    <span className="rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                      {inv.documentStatus}
+                    </span>
+                    <span className="rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                      {inv.paymentStatus || 'UNPAID'}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-stone-600">
+                    <span>Total: <strong>₹{((inv.grandTotalMinor || (inv.grandTotal ? inv.grandTotal * 100 : 0)) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                    <span>Confirmed: <strong>₹{((inv.paymentSummary?.confirmedMinor || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Link
+                    to={`/admin/invoices/${inv._id}`}
+                    className="inline-flex min-h-9 items-center rounded-lg border border-stone-300 bg-white px-3 text-xs font-bold text-stone-700 hover:bg-stone-50 no-underline"
+                  >
+                    View Invoice
+                  </Link>
+                  {inv.documentStatus === 'ISSUED' && inv.paymentStatus !== 'PAID' && (
+                    <Link
+                      to={`/admin/payments/new?invoiceId=${inv._id}`}
+                      className="inline-flex min-h-9 items-center rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-500 no-underline shadow-sm"
+                    >
+                      Record Payment
+                    </Link>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section
+        icon={Truck}
+        title="Physical Dispatch & Order Fulfillment"
+        description="Release reserved stone slabs from the yard and track Gate Passes."
+        action={
+          order.status === 'CONFIRMED' && reservations.some((r) => r.status === 'ACTIVE' && !r.preparedDispatchId) && (
+            <Link
+              to={`/admin/dispatch/new?salesOrderId=${order._id}`}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-stone-900 px-3.5 text-xs font-bold text-white no-underline shadow-sm hover:bg-stone-800"
+            >
+              <Truck className="h-4 w-4" />
+              Prepare Dispatch
+            </Link>
+          )
+        }
+      >
+        <div className="space-y-4">
+          {/* Fulfillment Progress Bar */}
+          <div className="rounded-xl border border-stone-200 bg-white p-4">
+            <div className="flex justify-between text-xs font-bold text-stone-700 mb-1.5">
+              <span>Overall Order Fulfillment</span>
+              <span>{order.fulfillmentStatus?.status || 'PENDING'}</span>
+            </div>
+            <div className="flex flex-wrap gap-4 text-xs text-stone-600 mt-2">
+              <span>Fulfilled Slabs: <strong>{order.fulfillmentStatus?.fulfilledQuantity || 0}</strong></span>
+              <span>Remaining Slabs: <strong>{order.fulfillmentStatus?.remainingQuantity ?? order.items?.reduce((s, i) => s + (i.quantity || 0), 0)}</strong></span>
+              <span>Fulfilled Area: <strong>{formatCommercialNumber(order.fulfillmentStatus?.fulfilledAreaSqFt || 0)} sq.ft</strong></span>
+            </div>
+          </div>
+
+          {/* Dispatches List */}
+          {dispatches.length === 0 ? (
+            <div className="py-4 text-center text-xs text-stone-500">
+              No physical dispatches recorded for this sales order yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {dispatches.map((d) => (
+                <article key={d._id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={`/admin/dispatch/${d._id}`}
+                        className="font-mono text-xs font-black text-amber-800 hover:underline"
+                      >
+                        {d.gatePassNumber || d.dispatchNumber || d._id}
+                      </Link>
+                      <span className="rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                        {d.status}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-4 text-xs text-stone-600">
+                      <span>Vehicle: <strong>{d.transport?.vehicleNumber || 'Self-Pickup'}</strong></span>
+                      <span>Slabs: <strong>{d.totalSlabsCount || (d.items || []).reduce((s, i) => s + (i.slabsCount || 0), 0)}</strong></span>
+                      <span>Area: <strong>{formatCommercialNumber(d.totalAreaSqFt || 0)} sq.ft</strong></span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/admin/dispatch/${d._id}`}
+                      className="inline-flex min-h-9 items-center rounded-lg border border-stone-300 bg-white px-3 text-xs font-bold text-stone-700 hover:bg-stone-50 no-underline"
+                    >
+                      View Dispatch
+                    </Link>
+                    {d.status === 'DISPATCHED' && (
+                      <Link
+                        to={`/admin/dispatch/${d._id}/print`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-stone-900 px-3 text-xs font-bold text-amber-400 hover:bg-stone-800 no-underline"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        Gate Pass
+                      </Link>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
       </Section>
 
       <div className="grid gap-6 xl:grid-cols-2">

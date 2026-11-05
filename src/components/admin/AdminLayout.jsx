@@ -3,6 +3,7 @@ import {
   BriefcaseBusiness,
   ChevronRight,
   ClipboardList,
+  CreditCard,
   ExternalLink,
   FileCheck2,
   FileText,
@@ -13,6 +14,7 @@ import {
   PackageSearch,
   Plus,
   ShieldCheck,
+  Truck,
   Users,
   X,
 } from 'lucide-react';
@@ -28,6 +30,8 @@ const NAV_ITEMS = [
   { label: 'Quotations', path: '/admin/quotations', icon: FileCheck2 },
   { label: 'Sales Orders', path: '/admin/sales-orders', icon: ClipboardList },
   { label: 'Invoices', path: '/admin/invoices', icon: FileText },
+  { label: 'Payments', path: '/admin/payments', icon: CreditCard },
+  { label: 'Dispatch', path: '/admin/dispatch', icon: Truck },
 ];
 
 const SECTION_LABELS = [
@@ -39,6 +43,8 @@ const SECTION_LABELS = [
   { prefix: '/admin/quotations', label: 'Quotations' },
   { prefix: '/admin/sales-orders', label: 'Sales Orders' },
   { prefix: '/admin/invoices', label: 'Invoices' },
+  { prefix: '/admin/payments', label: 'Payments' },
+  { prefix: '/admin/dispatch', label: 'Dispatch' },
 ];
 
 function getAdminBreadcrumbs(pathname) {
@@ -55,6 +61,9 @@ function getAdminBreadcrumbs(pathname) {
   else if (section.label === 'Processing' && pathname.endsWith('/edit')) detailLabel = 'Edit processing job';
   else if (pathname.endsWith('/edit')) detailLabel = 'Edit';
   else if (pathname === '/admin/invoices/new') detailLabel = 'New invoice';
+  else if (pathname === '/admin/payments/new') detailLabel = 'Record payment';
+  else if (pathname === '/admin/dispatch/new') detailLabel = 'New dispatch';
+  else if (section.label === 'Dispatch' && pathname.endsWith('/print')) detailLabel = 'Gate pass document';
   else if (section.label === 'CRM') detailLabel = 'Lead detail';
   else if (section.label === 'Customers') detailLabel = 'Customer detail';
   else if (section.label === 'Inventory') detailLabel = 'Batch detail';
@@ -62,6 +71,8 @@ function getAdminBreadcrumbs(pathname) {
   else if (section.label === 'Quotations') detailLabel = 'Quotation detail';
   else if (section.label === 'Sales Orders') detailLabel = 'Sales order detail';
   else if (section.label === 'Invoices') detailLabel = 'Invoice detail';
+  else if (section.label === 'Payments') detailLabel = 'Payment detail';
+  else if (section.label === 'Dispatch') detailLabel = 'Dispatch detail';
 
   return [
     { label: section.label, to: section.prefix },

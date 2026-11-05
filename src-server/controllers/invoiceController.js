@@ -218,7 +218,6 @@ export async function exportInvoiceExcel(req, res) {
     const yellowFill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
 
     const merge = (from, to) => ws.mergeCells(from, to);
-    const cell  = (addr) => ws.getCell(addr);
     const setCell = (addr, value, opts = {}) => {
       const c = ws.getCell(addr);
       c.value = value;
@@ -502,5 +501,177 @@ export async function exportInvoiceExcel(req, res) {
   } catch (err) {
     console.error('exportInvoiceExcel error:', err);
     res.status(500).json({ error: 'Failed to generate Excel.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 8 V2 Invoice Operations
+// ─────────────────────────────────────────────────────────────────────────────
+
+import {
+  BillingError,
+  createInvoiceDraft,
+  updateInvoiceDraft,
+  issueInvoice,
+  voidInvoice,
+  getInvoiceById,
+  listInvoicesV2,
+  getSellerTaxProfile,
+  updateSellerTaxProfile,
+  getEligibleSalesOrders,
+} from '../services/invoiceService.js';
+
+import {
+  validateInvoiceDraftCreate,
+  validateInvoiceDraftUpdate,
+  validateInvoiceIssue,
+  validateSellerTaxProfileUpdate,
+  parseBillingInvoiceListQuery,
+  parseEligibleSalesOrderQuery,
+} from '../utils/billingValidation.js';
+
+const AUTHENTICATED_ADMIN_ACTOR = 'authenticated-admin';
+
+function handleBillingError(res, error, fallbackMessage) {
+  if (error instanceof BillingError) {
+    return res.status(error.status).json({ error: error.message, code: error.code });
+  }
+  if (error?.name === 'ValidationError' || error?.name === 'CastError' || error?.name === 'StrictModeError') {
+    return res.status(400).json({ error: 'Invalid invoice data.' });
+  }
+  if (error?.code === 11000) {
+    return res.status(409).json({ error: 'Invoice operation conflicts with existing data.' });
+  }
+  console.error(`${fallbackMessage}:`, error?.message || error);
+  return res.status(500).json({ error: fallbackMessage });
+}
+
+export async function createInvoiceDraftRecord(req, res) {
+  const validation = validateInvoiceDraftCreate(req.body);
+  if (validation.error) return res.status(400).json({ error: validation.error });
+  try {
+    const result = await createInvoiceDraft({
+      salesOrderId: validation.value.salesOrderId,
+      requestKey: validation.value.requestKey,
+      draft: validation.value,
+      actor: req.admin?.role || AUTHENTICATED_ADMIN_ACTOR,
+    });
+    return res.status(result.duplicate ? 200 : 201).json({
+      invoice: result.invoice,
+      duplicate: result.duplicate,
+    });
+  } catch (error) {
+    return handleBillingError(res, error, 'Failed to create invoice draft.');
+  }
+}
+
+export async function updateInvoiceDraftRecord(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid invoice ID.' });
+  }
+  const validation = validateInvoiceDraftUpdate(req.body);
+  if (validation.error) return res.status(400).json({ error: validation.error });
+  try {
+    const result = await updateInvoiceDraft({
+      invoiceId: req.params.id,
+      updates: validation.value,
+      actor: req.admin?.role || AUTHENTICATED_ADMIN_ACTOR,
+    });
+    return res.json({ invoice: result.invoice });
+  } catch (error) {
+    return handleBillingError(res, error, 'Failed to update invoice draft.');
+  }
+}
+
+export async function issueInvoiceRecord(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid invoice ID.' });
+  }
+  const validation = validateInvoiceIssue(req.body);
+  if (validation.error) return res.status(400).json({ error: validation.error });
+  try {
+    const result = await issueInvoice({
+      invoiceId: req.params.id,
+      issueDate: validation.value.issueDate,
+      requestKey: validation.value.requestKey,
+      actor: req.admin?.role || AUTHENTICATED_ADMIN_ACTOR,
+    });
+    return res.json({ invoice: result.invoice, duplicate: result.duplicate });
+  } catch (error) {
+    return handleBillingError(res, error, 'Failed to issue invoice.');
+  }
+}
+
+export async function voidInvoiceRecord(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid invoice ID.' });
+  }
+  const reason = String(req.body?.reason || '').trim();
+  try {
+    const result = await voidInvoice({
+      invoiceId: req.params.id,
+      reason,
+      actor: req.admin?.role || AUTHENTICATED_ADMIN_ACTOR,
+    });
+    return res.json({ invoice: result.invoice });
+  } catch (error) {
+    return handleBillingError(res, error, 'Failed to void invoice.');
+  }
+}
+
+export async function getInvoiceRecord(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid invoice ID.' });
+  }
+  try {
+    const result = await getInvoiceById({ invoiceId: req.params.id });
+    return res.json(result);
+  } catch (error) {
+    return handleBillingError(res, error, 'Failed to load invoice.');
+  }
+}
+
+export async function listInvoiceRecordsV2(req, res) {
+  const validation = parseBillingInvoiceListQuery(req.query);
+  if (validation.error) return res.status(400).json({ error: validation.error });
+  try {
+    const result = await listInvoicesV2(validation.value);
+    return res.json(result);
+  } catch (error) {
+    return handleBillingError(res, error, 'Failed to list invoices.');
+  }
+}
+
+export async function getSellerTaxProfileRecord(_req, res) {
+  try {
+    const profile = await getSellerTaxProfile();
+    return res.json({ profile });
+  } catch (error) {
+    return handleBillingError(res, error, 'Failed to load seller tax profile.');
+  }
+}
+
+export async function updateSellerTaxProfileRecord(req, res) {
+  const validation = validateSellerTaxProfileUpdate(req.body);
+  if (validation.error) return res.status(400).json({ error: validation.error });
+  try {
+    const profile = await updateSellerTaxProfile({
+      updates: validation.value,
+      actor: req.admin?.role || AUTHENTICATED_ADMIN_ACTOR,
+    });
+    return res.json({ profile });
+  } catch (error) {
+    return handleBillingError(res, error, 'Failed to update seller tax profile.');
+  }
+}
+
+export async function getEligibleSalesOrdersRecord(req, res) {
+  const validation = parseEligibleSalesOrderQuery(req.query);
+  if (validation.error) return res.status(400).json({ error: validation.error });
+  try {
+    const result = await getEligibleSalesOrders(validation.value);
+    return res.json(result);
+  } catch (error) {
+    return handleBillingError(res, error, 'Failed to load eligible sales orders.');
   }
 }

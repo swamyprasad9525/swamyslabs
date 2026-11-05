@@ -36,6 +36,13 @@ const SalesOrderDetailPage = lazy(() => import('./pages/admin/SalesOrderDetailPa
 const InvoiceListPage = lazy(() => import('./pages/admin/InvoiceListPage'));
 const InvoiceFormPage = lazy(() => import('./pages/admin/InvoiceFormPage'));
 const InvoiceViewPage = lazy(() => import('./pages/admin/InvoiceViewPage'));
+const PaymentListPage = lazy(() => import('./pages/admin/PaymentListPage'));
+const PaymentFormPage = lazy(() => import('./pages/admin/PaymentFormPage'));
+const PaymentDetailPage = lazy(() => import('./pages/admin/PaymentDetailPage'));
+const DispatchListPage = lazy(() => import('./pages/admin/DispatchListPage'));
+const DispatchFormPage = lazy(() => import('./pages/admin/DispatchFormPage'));
+const DispatchDetailPage = lazy(() => import('./pages/admin/DispatchDetailPage'));
+const DispatchPrintPage = lazy(() => import('./pages/admin/DispatchPrintPage'));
 const AdminNotFoundPage = lazy(() => import('./pages/admin/AdminNotFoundPage'));
 
 const RouteFallback = () => (
@@ -125,6 +132,13 @@ export default function App() {
                 <Route path="invoices" element={<InvoiceListPage />} />
                 <Route path="invoices/new" element={<InvoiceFormPage />} />
                 <Route path="invoices/:id" element={<InvoiceViewPage />} />
+                <Route path="payments" element={<PaymentListPage />} />
+                <Route path="payments/new" element={<PaymentFormPage />} />
+                <Route path="payments/:id" element={<PaymentDetailPage />} />
+                <Route path="dispatch" element={<DispatchListPage />} />
+                <Route path="dispatch/new" element={<DispatchFormPage />} />
+                <Route path="dispatch/:id" element={<DispatchDetailPage />} />
+                <Route path="dispatch/:id/print" element={<DispatchPrintPage />} />
                 <Route path="*" element={<AdminNotFoundPage />} />
               </Route>
             </Route>

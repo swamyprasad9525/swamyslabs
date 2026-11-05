@@ -2,33 +2,33 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAdmin } from '../../context/AdminContext';
 import { 
-  FileText, Plus, Search, Calendar, RefreshCw, Eye, Download, 
-  IndianRupee, TrendingUp, Layers, CheckCircle2, AlertCircle
+  FileText, Plus, Search, RefreshCw, Eye, Download, 
+  IndianRupee, CheckCircle2, AlertCircle, ShieldAlert,
+  Clock, Ban
 } from 'lucide-react';
-import { motion } from 'framer-motion';
-
-const fmt = (n) =>
-  Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const fmtDate = (d) => {
-  if (!d) return '';
-  const dt = new Date(d);
-  return `${String(dt.getDate()).padStart(2, '0')}-${String(dt.getMonth() + 1).padStart(2, '0')}-${dt.getFullYear()}`;
-};
+import {
+  formatBillingDate,
+  formatBillingMoney,
+  INVOICE_DOCUMENT_STATUS_STYLES,
+  INVOICE_PAYMENT_STATUS_STYLES,
+  labelInvoiceDocumentStatus,
+  labelInvoicePaymentStatus,
+  parseBillingResponse,
+} from '../../lib/billing';
 
 export default function InvoiceListPage() {
   const { authFetch, logout } = useAdmin();
   const navigate = useNavigate();
 
-  const [invoices, setInvoices]   = useState([]);
-  const [total, setTotal]         = useState(0);
-  const [page, setPage]           = useState(1);
-  const [pages, setPages]         = useState(1);
-  const [search, setSearch]       = useState('');
-  const [from, setFrom]           = useState('');
-  const [to, setTo]               = useState('');
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
+  const [invoices, setInvoices] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [search, setSearch] = useState('');
+  const [documentStatus, setDocumentStatus] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [dlLoading, setDlLoading] = useState(null);
 
   const fetchInvoices = useCallback(async () => {
@@ -37,21 +37,21 @@ export default function InvoiceListPage() {
     try {
       const params = new URLSearchParams({ page, limit: 15 });
       if (search) params.set('search', search);
-      if (from)   params.set('from', from);
-      if (to)     params.set('to', to);
+      if (documentStatus) params.set('documentStatus', documentStatus);
+      if (paymentStatus) params.set('paymentStatus', paymentStatus);
 
-      const res = await authFetch(`/api/invoices?${params}`);
-      if (res.status === 401) { logout(); return; }
-      const data = await res.json();
+      const res = await authFetch(`/api/admin/invoices?${params}`);
+      if (res.status === 401) { logout(); navigate('/admin/login', { replace: true }); return; }
+      const data = await parseBillingResponse(res, 'Failed to load invoices.');
       setInvoices(data.invoices || []);
       setTotal(data.total || 0);
       setPages(data.pages || 1);
-    } catch {
-      setError('Failed to load invoices. Please check connection.');
+    } catch (err) {
+      setError(err.message || 'Failed to load invoices.');
     } finally {
       setLoading(false);
     }
-  }, [authFetch, logout, page, search, from, to]);
+  }, [authFetch, logout, navigate, page, search, documentStatus, paymentStatus]);
 
   useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
 
@@ -63,8 +63,8 @@ export default function InvoiceListPage() {
 
   const handleReset = () => {
     setSearch('');
-    setFrom('');
-    setTo('');
+    setDocumentStatus('');
+    setPaymentStatus('');
     setPage(1);
   };
 
@@ -74,62 +74,72 @@ export default function InvoiceListPage() {
       const res = await authFetch(`/api/invoices/${id}/excel`);
       if (!res.ok) { throw new Error('Export failed'); }
       const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
       a.download = `Invoice_${invoiceNumber.replace(/\//g, '-')}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (err) {
-      alert('Failed to download Excel file. Please try again.');
+    } catch {
+      alert('Excel download is only available for legacy format invoices.');
     } finally {
       setDlLoading(null);
     }
   };
 
-  // Compute stats on currently loaded page/total
-  const totalRevenueOnPage = invoices.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0);
-  const igstCount = invoices.filter(i => i.taxType === 'IGST').length;
-  const cgstCount = invoices.filter(i => i.taxType === 'CGST_SGST').length;
-  const avgInvoiceValue = invoices.length > 0 ? totalRevenueOnPage / invoices.length : 0;
+  // Metrics on page
+  const totalBilledOnPage = invoices.reduce((sum, inv) => {
+    if (inv.grandTotalMinor != null) return sum + inv.grandTotalMinor;
+    return sum + ((inv.grandTotal || 0) * 100);
+  }, 0);
+
+  const outstandingOnPage = invoices.reduce((sum, inv) => {
+    if (inv.paymentSummary?.outstandingMinor != null) {
+      return sum + inv.paymentSummary.outstandingMinor;
+    }
+    return sum;
+  }, 0);
+
+  const issuedCount = invoices.filter((i) => i.documentStatus === 'ISSUED' || !i.documentStatus).length;
+  const draftCount = invoices.filter((i) => i.documentStatus === 'DRAFT').length;
 
   return (
-    <div className="min-h-screen bg-stone-100 font-sans selection:bg-amber-400 selection:text-stone-950 pb-16">
+    <div className="min-h-screen bg-stone-100 font-sans pb-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 space-y-6">
         
         {/* Title Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-stone-900 tracking-tight flex items-center gap-2.5">
-              <span>GST Invoices Dashboard</span>
+              <span>Invoices & Billing</span>
               <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-stone-900 text-amber-400 shadow-sm">
                 {total} Total
               </span>
             </h1>
             <p className="text-xs text-stone-500 font-medium mt-1">
-              Manage, search, preview, print, and export official GST E-Waybill invoices.
+              Sales Order billing, official GST tax invoices, and payment tracking.
             </p>
           </div>
 
-          <Link
-            id="new-invoice-btn"
-            to="/admin/invoices/new"
-            className="bg-stone-950 hover:bg-stone-800 text-amber-400 border border-stone-800 px-5 py-3 rounded-2xl text-xs font-black tracking-wide inline-flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-xl active:scale-95 no-underline"
-          >
-            <Plus className="w-4 h-4 text-amber-400" />
-            <span>Create New Invoice</span>
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              id="new-invoice-btn"
+              to="/admin/invoices/new"
+              className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition shadow-sm no-underline"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Invoice</span>
+            </Link>
+          </div>
         </div>
 
-        {/* ── KPI METRICS CARDS ─────────────────────────────────────────────── */}
+        {/* KPI METRICS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          
-          {/* Tile 1: Total Revenue */}
-          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
+          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
             <div>
-              <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Page Revenue</div>
+              <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Page Billed Amount</div>
               <div className="text-xl sm:text-2xl font-black text-stone-900 mt-1 font-mono">
-                ₹{fmt(totalRevenueOnPage)}
+                {formatBillingMoney(totalBilledOnPage)}
               </div>
               <div className="text-[10px] text-stone-400 font-medium mt-1">
                 From {invoices.length} invoices on page
@@ -140,291 +150,249 @@ export default function InvoiceListPage() {
             </div>
           </div>
 
-          {/* Tile 2: Total Invoices */}
-          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
+          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
             <div>
-              <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Invoices Issued</div>
-              <div className="text-xl sm:text-2xl font-black text-stone-900 mt-1">
-                {total} Records
+              <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Page Outstanding</div>
+              <div className="text-xl sm:text-2xl font-black text-amber-800 mt-1 font-mono">
+                {formatBillingMoney(outstandingOnPage)}
               </div>
-              <div className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> System synchronized
+              <div className="text-[10px] text-amber-700 font-bold mt-1">
+                Awaiting confirmed payment
               </div>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+              <Clock className="w-6 h-6" />
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Issued Invoices</div>
+              <div className="text-xl sm:text-2xl font-black text-stone-900 mt-1">
+                {issuedCount}
+              </div>
+              <div className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> Legally active
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
               <FileText className="w-6 h-6" />
             </div>
           </div>
 
-          {/* Tile 3: Tax Type Breakdown */}
-          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
+          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
             <div>
-              <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Tax Split (Page)</div>
-              <div className="text-sm font-bold text-stone-900 mt-1 flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-black">
-                  {igstCount} IGST
-                </span>
-                <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-xs font-black">
-                  {cgstCount} Local
-                </span>
+              <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Draft Invoices</div>
+              <div className="text-xl sm:text-2xl font-black text-stone-900 mt-1">
+                {draftCount}
               </div>
-              <div className="text-[10px] text-stone-400 font-medium mt-1">
-                Inter-state vs Intra-state
+              <div className="text-[10px] text-stone-500 font-medium mt-1">
+                Pending official issuance
               </div>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
-              <Layers className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-2xl bg-stone-50 border border-stone-200 flex items-center justify-center text-stone-600">
+              <FileText className="w-6 h-6" />
             </div>
           </div>
-
-          {/* Tile 4: Avg Invoice Value */}
-          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
-            <div>
-              <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Average Ticket</div>
-              <div className="text-xl sm:text-2xl font-black text-stone-900 mt-1 font-mono">
-                ₹{fmt(avgInvoiceValue)}
-              </div>
-              <div className="text-[10px] text-stone-400 font-medium mt-1">
-                Average value per invoice
-              </div>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-              <TrendingUp className="w-6 h-6" />
-            </div>
-          </div>
-
         </div>
 
-        {/* ── SEARCH & FILTER TOOLBAR ───────────────────────────────────────── */}
-        <form onSubmit={handleSearch} className="bg-white p-4 rounded-2xl shadow-sm border border-stone-200 flex flex-wrap items-end gap-3">
-          
-          {/* Search bar */}
-          <div className="flex-1 min-w-[240px]">
-            <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Search className="w-3.5 h-3.5 text-stone-400" />
-              <span>Search Buyer or Invoice No</span>
-            </label>
-            <input
-              id="invoice-search"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all font-medium placeholder:text-stone-400"
-              placeholder="e.g. GLOBAL IMPEX or 16/2025-26"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
+        {/* Filter Bar */}
+        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by invoice #, customer name, sales order..."
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition"
+              />
+            </div>
 
-          {/* Date From */}
-          <div className="w-36">
-            <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-stone-400" />
-              <span>From Date</span>
-            </label>
-            <input
-              id="date-from"
-              type="date"
-              className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all font-medium"
-              value={from}
-              onChange={e => setFrom(e.target.value)}
-            />
-          </div>
-
-          {/* Date To */}
-          <div className="w-36">
-            <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-stone-400" />
-              <span>To Date</span>
-            </label>
-            <input
-              id="date-to"
-              type="date"
-              className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all font-medium"
-              value={to}
-              onChange={e => setTo(e.target.value)}
-            />
-          </div>
-
-          {/* Buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              className="bg-stone-900 hover:bg-stone-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
+            <select
+              value={documentStatus}
+              onChange={(e) => { setDocumentStatus(e.target.value); setPage(1); }}
+              className="text-xs border border-stone-300 bg-stone-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
             >
-              <Search className="w-3.5 h-3.5" />
-              <span>Filter</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="bg-stone-200 hover:bg-stone-300 text-stone-700 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
-              title="Reset Filters"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-stone-500" />
-              <span>Reset</span>
-            </button>
-          </div>
+              <option value="">All Document Statuses</option>
+              <option value="DRAFT">Draft</option>
+              <option value="ISSUED">Issued</option>
+              <option value="VOID">Void</option>
+            </select>
 
-        </form>
+            <select
+              value={paymentStatus}
+              onChange={(e) => { setPaymentStatus(e.target.value); setPage(1); }}
+              className="text-xs border border-stone-300 bg-stone-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="">All Payment Statuses</option>
+              <option value="UNPAID">Unpaid</option>
+              <option value="PARTIALLY_PAID">Partially Paid</option>
+              <option value="PAID">Paid</option>
+            </select>
+
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="bg-stone-900 hover:bg-stone-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Filter</span>
+              </button>
+              {(search || documentStatus || paymentStatus) && (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="bg-stone-200 hover:bg-stone-300 text-stone-700 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
 
         {error && (
-          <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-xs font-bold flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600" />
+          <div className="p-4 rounded-xl border border-rose-200 bg-rose-50 text-xs font-bold text-rose-800 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        {/* ── TABLE CONTAINER ──────────────────────────────────────────────── */}
-        {loading ? (
-          <div className="bg-white rounded-2xl border border-stone-200 p-16 text-center text-stone-500 font-bold animate-pulse space-y-3">
-            <div className="w-10 h-10 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
-            <div>Loading invoices catalog…</div>
-          </div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden"
-          >
+        {/* Table View */}
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+          {loading ? (
+            <div className="p-12 text-center text-xs font-bold text-stone-500 flex flex-col items-center justify-center gap-2">
+              <RefreshCw className="w-6 h-6 animate-spin text-amber-600" />
+              <span>Loading invoice records...</span>
+            </div>
+          ) : invoices.length === 0 ? (
+            <div className="p-12 text-center text-stone-500 space-y-2">
+              <FileText className="w-10 h-10 mx-auto text-stone-300" />
+              <div className="text-sm font-bold text-stone-700">No invoices found</div>
+              <p className="text-xs max-w-sm mx-auto">
+                No billing records match your filter criteria. Create an invoice draft from an active Sales Order.
+              </p>
+            </div>
+          ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left whitespace-nowrap">
+              <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="bg-stone-950 text-white border-b border-stone-800">
-                    <th className="px-5 py-3.5 text-[11px] font-black tracking-wider uppercase">Invoice No</th>
-                    <th className="px-5 py-3.5 text-[11px] font-black tracking-wider uppercase">Date</th>
-                    <th className="px-5 py-3.5 text-[11px] font-black tracking-wider uppercase">Buyer Name</th>
-                    <th className="px-5 py-3.5 text-[11px] font-black tracking-wider uppercase">Copy Type</th>
-                    <th className="px-5 py-3.5 text-[11px] font-black tracking-wider uppercase">Tax Type</th>
-                    <th className="px-5 py-3.5 text-[11px] font-black tracking-wider uppercase text-right">Grand Total</th>
-                    <th className="px-5 py-3.5 text-[11px] font-black tracking-wider uppercase text-center">Actions</th>
+                  <tr className="border-b border-stone-200 bg-stone-50 font-bold text-stone-600 uppercase tracking-wider text-[10px]">
+                    <th className="py-3 px-4">Invoice #</th>
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Sales Order</th>
+                    <th className="py-3 px-4">Customer</th>
+                    <th className="py-3 px-4 text-right">Amount</th>
+                    <th className="py-3 px-4 text-center">Document</th>
+                    <th className="py-3 px-4 text-center">Payment</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {invoices.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-16 text-center">
-                        <FileText className="w-12 h-12 text-stone-300 mx-auto mb-3" />
-                        <div className="text-base font-bold text-stone-700">No Invoices Found</div>
-                        <div className="text-xs text-stone-400 mt-1 mb-4">
-                          Try adjusting your search criteria or create a new invoice.
-                        </div>
-                        <Link
-                          to="/admin/invoices/new"
-                          className="inline-flex items-center gap-1.5 bg-stone-900 text-amber-400 font-bold text-xs px-4 py-2 rounded-xl no-underline hover:bg-stone-800 transition"
-                        >
-                          <Plus className="w-4 h-4" />
-                          <span>Create First Invoice</span>
-                        </Link>
-                      </td>
-                    </tr>
-                  ) : (
-                    invoices.map(inv => {
-                      const buyerName = inv['buyer.name'] || inv.buyer?.name || 'N/A';
-                      const initial = buyerName.charAt(0).toUpperCase();
+                  {invoices.map((inv) => {
+                    const isV2 = inv.recordVersion === 2;
+                    const docStatus = inv.documentStatus || 'ISSUED';
+                    const payStatus = inv.paymentSummary?.status || 'UNPAID';
+                    const customerName = inv.customerIdentitySnapshot?.company
+                      || inv.customerIdentitySnapshot?.name
+                      || inv.buyer?.name
+                      || 'Unknown customer';
 
-                      return (
-                        <tr key={inv._id} className="hover:bg-stone-50/80 transition-colors group">
-                          
-                          {/* Invoice Number */}
-                          <td className="px-5 py-4">
-                            <span className="font-extrabold text-xs text-stone-900 font-mono bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200">
-                              {inv.invoiceNumber}
-                            </span>
-                          </td>
+                    const amountMinor = inv.grandTotalMinor != null ? inv.grandTotalMinor : (inv.grandTotal * 100);
 
-                          {/* Date */}
-                          <td className="px-5 py-4 text-xs font-semibold text-stone-600">
-                            {fmtDate(inv.invoiceDate)}
-                          </td>
-
-                          {/* Buyer */}
-                          <td className="px-5 py-4">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-full bg-stone-900 text-amber-400 font-black text-xs flex items-center justify-center flex-shrink-0">
-                                {initial}
-                              </div>
-                              <span className="text-xs font-bold text-stone-900 truncate max-w-[200px]">
-                                {buyerName}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Copy Type */}
-                          <td className="px-5 py-4 text-xs text-stone-500 font-medium">
-                            {(inv.copyType || 'ORIGINAL').split(' ')[0]}
-                          </td>
-
-                          {/* Tax Type */}
-                          <td className="px-5 py-4">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                              inv.taxType === 'IGST'
-                                ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                                : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
-                            }`}>
-                              {inv.taxType}
-                            </span>
-                          </td>
-
-                          {/* Grand Total */}
-                          <td className="px-5 py-4 text-xs font-black font-mono text-stone-900 text-right">
-                            ₹{fmt(inv.grandTotal)}
-                          </td>
-
-                          {/* Actions */}
-                          <td className="px-5 py-4">
-                            <div className="flex items-center justify-center gap-2">
+                    return (
+                      <tr key={inv._id} className="hover:bg-stone-50 transition">
+                        <td className="py-3 px-4 font-mono font-bold text-amber-900">
+                          {inv.invoiceNumber}
+                        </td>
+                        <td className="py-3 px-4 text-stone-600">
+                          {formatBillingDate(inv.issueDate || inv.invoiceDate)}
+                        </td>
+                        <td className="py-3 px-4">
+                          {inv.salesOrderId ? (
+                            <Link
+                              to={`/admin/sales-orders/${inv.salesOrderId}`}
+                              className="font-mono text-stone-700 hover:text-amber-700 font-bold underline"
+                            >
+                              {inv.salesOrderNumber || 'Sales Order'}
+                            </Link>
+                          ) : (
+                            <span className="text-stone-400">Legacy / Direct</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-stone-900 max-w-[200px] truncate">
+                          {customerName}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-stone-900">
+                          {formatBillingMoney(amountMinor)}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${INVOICE_DOCUMENT_STATUS_STYLES[docStatus] || INVOICE_DOCUMENT_STATUS_STYLES.DRAFT}`}>
+                            {labelInvoiceDocumentStatus(docStatus)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${INVOICE_PAYMENT_STATUS_STYLES[payStatus] || INVOICE_PAYMENT_STATUS_STYLES.UNPAID}`}>
+                            {labelInvoicePaymentStatus(payStatus)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Link
+                              to={`/admin/invoices/${inv._id}`}
+                              className="p-1.5 rounded-lg border border-stone-200 hover:bg-stone-100 text-stone-700 font-bold flex items-center gap-1 text-[11px] no-underline"
+                              title="View & Manage Invoice"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>View</span>
+                            </Link>
+                            {!isV2 && (
                               <button
-                                id={`view-${inv._id}`}
-                                onClick={() => navigate(`/admin/invoices/${inv._id}`)}
-                                className="bg-white border border-stone-300 hover:border-stone-400 hover:bg-stone-100 text-stone-800 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
-                                title="View & Print Invoice"
-                              >
-                                <Eye className="w-3.5 h-3.5 text-stone-600" />
-                                <span>View</span>
-                              </button>
-
-                              <button
-                                id={`excel-${inv._id}`}
-                                disabled={dlLoading === inv._id}
                                 onClick={() => downloadExcel(inv._id, inv.invoiceNumber)}
-                                className="bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                                title="Download Excel (.xlsx)"
+                                disabled={dlLoading === inv._id}
+                                className="p-1.5 rounded-lg border border-stone-200 hover:bg-stone-100 text-emerald-700 font-bold flex items-center gap-1 text-[11px] cursor-pointer"
+                                title="Download Excel"
                               >
-                                {dlLoading === inv._id ? (
-                                  <span className="animate-spin text-xs">⏳</span>
-                                ) : (
-                                  <Download className="w-3.5 h-3.5 text-emerald-700" />
-                                )}
-                                <span>Excel</span>
+                                <Download className="w-3.5 h-3.5" />
                               </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+          )}
 
-            {/* Pagination */}
-            {pages > 1 && (
-              <div className="flex justify-center items-center gap-2 p-4 border-t border-stone-100 bg-stone-50">
-                {Array.from({ length: pages }, (_, i) => i + 1).map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      p === page
-                        ? 'bg-stone-950 text-amber-400 shadow-md font-black'
-                        : 'bg-white border border-stone-300 text-stone-700 hover:bg-stone-100'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
+          {/* Pagination */}
+          {pages > 1 && (
+            <div className="p-4 border-t border-stone-200 flex items-center justify-between text-xs text-stone-600">
+              <div>
+                Page <span className="font-bold">{page}</span> of <span className="font-bold">{pages}</span>
               </div>
-            )}
-          </motion.div>
-        )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-1.5 rounded-lg border border-stone-200 disabled:opacity-40 font-bold hover:bg-stone-50 cursor-pointer"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                  disabled={page >= pages}
+                  className="px-3 py-1.5 rounded-lg border border-stone-200 disabled:opacity-40 font-bold hover:bg-stone-50 cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
       </div>
     </div>

@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import InventoryReservation from '../models/InventoryReservation.js';
+import Invoice from '../models/Invoice.js';
+import Dispatch from '../models/Dispatch.js';
 import {
   applySalesOrderAllocation,
   applySalesOrderRelease,
@@ -105,15 +107,19 @@ export async function listSalesOrderRecords(req, res) {
 export async function getSalesOrderRecord(req, res) {
   if (invalidId(res, req.params.id, 'sales order ID')) return undefined;
   try {
-    const [salesOrder, events, reservations] = await Promise.all([
+    const [salesOrder, events, reservations, invoices, dispatches] = await Promise.all([
       getSalesOrder({ salesOrderId: req.params.id }),
       listSalesOrderEvents({ salesOrderId: req.params.id }),
       InventoryReservation.find({ salesOrderId: req.params.id }).sort({ createdAt: 1, _id: 1 }).lean(),
+      Invoice.find({ salesOrderId: req.params.id }).sort({ createdAt: -1 }).lean(),
+      Dispatch.find({ salesOrderId: req.params.id }).sort({ createdAt: -1 }).lean(),
     ]);
     return res.json(adminJson({
       salesOrder,
       events,
       reservations,
+      invoices,
+      dispatches,
       allowedActions: salesOrderAllowedActions(salesOrder),
     }));
   } catch (error) {

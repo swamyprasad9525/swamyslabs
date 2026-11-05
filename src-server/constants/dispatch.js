@@ -20,6 +20,16 @@ export const DISPATCH_TRANSITIONS = Object.freeze({
   CANCELLED: Object.freeze([]),
 });
 
+export const TRANSPORT_MODES = Object.freeze([
+  'ROAD',
+  'BY_LORRY',
+  'RAIL',
+  'AIR',
+  'OCEAN',
+  'CUSTOMER_PICKUP',
+  'OTHER',
+]);
+
 export const DISPATCH_REFERENCE_PREFIX = 'DSP';
 export const DEFAULT_DISPATCH_PAGE_SIZE = 20;
 export const MAX_DISPATCH_PAGE_SIZE = 100;
