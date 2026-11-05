@@ -357,7 +357,7 @@ export default function MaterialMediaViewer({ images, materialName }) {
               onError={() => recordImageError(currentMedia.src)}
               width="1200"
               height="1200"
-              fetchPriority="high"
+              fetchpriority="high"
               decoding="async"
               className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.025] motion-reduce:transform-none motion-reduce:transition-none"
             />

@@ -7,6 +7,7 @@ export const INVENTORY_STATUSES = Object.freeze([
   'DRAFT',
   'AVAILABLE',
   'HOLD',
+  'IN_PROCESSING',
   'DEPLETED',
   'ARCHIVED',
 ]);
@@ -16,6 +17,8 @@ export const MOVEMENT_TYPES = Object.freeze([
   'ADJUSTMENT_IN',
   'ADJUSTMENT_OUT',
   'TRANSFER',
+  'PROCESSING_ISSUE',
+  'PROCESSING_RETURN',
 ]);
 
 export const ADJUSTMENT_DIRECTIONS = Object.freeze(['IN', 'OUT']);
@@ -31,9 +34,7 @@ export const INVENTORY_REFERENCE_PREFIXES = Object.freeze({
 });
 
 export const FUTURE_MOVEMENT_LINK_FIELDS = Object.freeze([
-  'relatedProcessingJobId',
   'relatedQuotationId',
   'relatedSalesOrderId',
   'relatedDispatchId',
 ]);
-

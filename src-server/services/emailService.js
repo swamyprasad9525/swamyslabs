@@ -3,6 +3,10 @@ import { escapeHtml } from '../utils/security.js';
 
 let transporter;
 
+export function isEmailNotificationConfigured(env = process.env) {
+  return Boolean(env.EMAIL_USER?.trim() && env.EMAIL_PASS?.trim());
+}
+
 function getTransporter() {
   if (!transporter) {
     transporter = nodemailer.createTransport({

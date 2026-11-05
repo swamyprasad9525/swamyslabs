@@ -24,6 +24,15 @@ const CustomerDetailPage = lazy(() => import('./pages/admin/CustomerDetailPage')
 const InventoryPage = lazy(() => import('./pages/admin/InventoryPage'));
 const InventoryBatchFormPage = lazy(() => import('./pages/admin/InventoryBatchFormPage'));
 const InventoryBatchDetailPage = lazy(() => import('./pages/admin/InventoryBatchDetailPage'));
+const ProcessingPage = lazy(() => import('./pages/admin/ProcessingPage'));
+const ProcessingJobFormPage = lazy(() => import('./pages/admin/ProcessingJobFormPage'));
+const ProcessingJobDetailPage = lazy(() => import('./pages/admin/ProcessingJobDetailPage'));
+const QuotationListPage = lazy(() => import('./pages/admin/QuotationListPage'));
+const QuotationFormPage = lazy(() => import('./pages/admin/QuotationFormPage'));
+const QuotationDetailPage = lazy(() => import('./pages/admin/QuotationDetailPage'));
+const QuotationPrintPage = lazy(() => import('./pages/admin/QuotationPrintPage'));
+const SalesOrderListPage = lazy(() => import('./pages/admin/SalesOrderListPage'));
+const SalesOrderDetailPage = lazy(() => import('./pages/admin/SalesOrderDetailPage'));
 const InvoiceListPage = lazy(() => import('./pages/admin/InvoiceListPage'));
 const InvoiceFormPage = lazy(() => import('./pages/admin/InvoiceFormPage'));
 const InvoiceViewPage = lazy(() => import('./pages/admin/InvoiceViewPage'));
@@ -102,6 +111,17 @@ export default function App() {
                 <Route path="inventory/batches/new" element={<InventoryBatchFormPage />} />
                 <Route path="inventory/batches/:id" element={<InventoryBatchDetailPage />} />
                 <Route path="inventory/batches/:id/edit" element={<InventoryBatchFormPage />} />
+                <Route path="processing" element={<ProcessingPage />} />
+                <Route path="processing/jobs/new" element={<ProcessingJobFormPage />} />
+                <Route path="processing/jobs/:id/edit" element={<ProcessingJobFormPage />} />
+                <Route path="processing/jobs/:id" element={<ProcessingJobDetailPage />} />
+                <Route path="quotations" element={<QuotationListPage />} />
+                <Route path="quotations/new" element={<QuotationFormPage />} />
+                <Route path="quotations/:id/edit" element={<QuotationFormPage />} />
+                <Route path="quotations/:id/print" element={<QuotationPrintPage />} />
+                <Route path="quotations/:id" element={<QuotationDetailPage />} />
+                <Route path="sales-orders" element={<SalesOrderListPage />} />
+                <Route path="sales-orders/:id" element={<SalesOrderDetailPage />} />
                 <Route path="invoices" element={<InvoiceListPage />} />
                 <Route path="invoices/new" element={<InvoiceFormPage />} />
                 <Route path="invoices/:id" element={<InvoiceViewPage />} />

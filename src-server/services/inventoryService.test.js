@@ -17,8 +17,11 @@ import {
   createInventorySlab,
   formatInventoryReference,
   getInventorySummary,
+  getPublicStoneAvailability,
   inventoryCostValue,
+  listInventoryAllocationCandidates,
   listInventoryBatches,
+  listReservableSlabs,
   locationsEqual,
   nextInventoryReference,
   normalizeInventoryLocation,
@@ -100,10 +103,14 @@ function createModels({ batch, movement, slab } = {}) {
 }
 
 describe('inventory constants and reference helpers', () => {
-  it('publishes only Phase 5 inventory modes, statuses and movement types', () => {
+  it('publishes inventory and processing-aware statuses and movement types', () => {
     expect(INVENTORY_MODES).toEqual(['BATCH', 'INDIVIDUAL_SLAB']);
-    expect(INVENTORY_STATUSES).toEqual(['DRAFT', 'AVAILABLE', 'HOLD', 'DEPLETED', 'ARCHIVED']);
-    expect(MOVEMENT_TYPES).toEqual(['RECEIPT', 'ADJUSTMENT_IN', 'ADJUSTMENT_OUT', 'TRANSFER']);
+    expect(INVENTORY_STATUSES).toEqual([
+      'DRAFT', 'AVAILABLE', 'HOLD', 'IN_PROCESSING', 'DEPLETED', 'ARCHIVED',
+    ]);
+    expect(MOVEMENT_TYPES).toEqual([
+      'RECEIPT', 'ADJUSTMENT_IN', 'ADJUSTMENT_OUT', 'TRANSFER', 'PROCESSING_ISSUE', 'PROCESSING_RETURN',
+    ]);
     expect(ADJUSTMENT_DIRECTIONS).toEqual(['IN', 'OUT']);
   });
 
@@ -184,6 +191,7 @@ describe('batch creation', () => {
       batchNumber: 'BAT-2026-0001',
       stoneRef,
       inventoryMode: 'BATCH',
+      publicAvailabilityVisible: false,
       createdBy: ACTOR,
     }));
     expect(models.InventoryMovementModel.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -194,6 +202,26 @@ describe('batch creation', () => {
       actor: ACTOR,
     }));
     expect(result.movements).toHaveLength(1);
+  });
+
+  it('normalizes an explicit public visibility opt-in and rejects non-booleans', async () => {
+    const models = createModels();
+    await createInventoryBatch({
+      input: baseCreateInput({ publicAvailabilityVisible: true }),
+      actor: ACTOR,
+      now: NOW,
+      models,
+    });
+    expect(models.InventoryBatchModel.create).toHaveBeenCalledWith(expect.objectContaining({
+      publicAvailabilityVisible: true,
+    }));
+
+    await expect(createInventoryBatch({
+      input: baseCreateInput({ publicAvailabilityVisible: 'true' }),
+      actor: ACTOR,
+      now: NOW,
+      models: createModels(),
+    })).rejects.toThrow('must be true or false');
   });
 
   it('rejects negative received quantity and area before persistence', async () => {
@@ -257,6 +285,70 @@ describe('batch creation', () => {
   });
 });
 
+describe('public catalog availability', () => {
+  it('maps a requested catalog slug to its canonical identity before querying inventory', async () => {
+    const models = createModels();
+    models.InventoryBatchModel.exists.mockResolvedValue(null);
+
+    const result = await getPublicStoneAvailability({
+      stoneSlug: '  TANDUR-YELLOW-LIMESTONE-COBBLE-PREMIUM  ',
+      models,
+    });
+
+    expect(models.InventoryBatchModel.exists).toHaveBeenCalledWith({
+      'stoneRef.slug': stoneRef.slug,
+      publicAvailabilityVisible: true,
+      status: 'AVAILABLE',
+      $expr: expect.objectContaining({
+        $cond: expect.arrayContaining([
+          expect.objectContaining({ $isNumber: '$area.availableSqFt' }),
+        ]),
+      }),
+    });
+    expect(JSON.stringify(models.InventoryBatchModel.exists.mock.calls[0][0]))
+      .toContain('reservationBalance');
+    expect(result.stone).toEqual({ slug: stoneRef.slug, name: stoneRef.name });
+  });
+
+  it('keeps availability private when no explicitly visible stock exists', async () => {
+    const models = createModels();
+    models.InventoryBatchModel.exists.mockResolvedValue(null);
+
+    await expect(getPublicStoneAvailability({ stoneSlug: stoneRef.slug, models })).resolves.toEqual({
+      stone: { slug: stoneRef.slug, name: stoneRef.name },
+      availability: {
+        status: 'CONFIRM_DURING_QUOTATION',
+        message: 'Availability is confirmed during quotation.',
+      },
+    });
+  });
+
+  it('returns only a safe status and message for explicitly visible available stock', async () => {
+    const models = createModels();
+    models.InventoryBatchModel.exists.mockResolvedValue({ _id: BATCH_ID });
+
+    const result = await getPublicStoneAvailability({ stoneSlug: stoneRef.slug, models });
+
+    expect(result).toEqual({
+      stone: { slug: stoneRef.slug, name: stoneRef.name },
+      availability: {
+        status: 'AVAILABLE_FOR_ENQUIRY',
+        message: 'Currently available for enquiry. Final selection and quantity are confirmed during quotation.',
+      },
+    });
+    expect(Object.keys(result)).toEqual(['stone', 'availability']);
+    expect(Object.keys(result.availability)).toEqual(['status', 'message']);
+  });
+
+  it('rejects a slug outside the canonical catalog without querying inventory', async () => {
+    const models = createModels();
+
+    await expect(getPublicStoneAvailability({ stoneSlug: 'not-a-catalog-stone', models }))
+      .rejects.toMatchObject({ status: 404, code: 'STONE_NOT_FOUND' });
+    expect(models.InventoryBatchModel.exists).not.toHaveBeenCalled();
+  });
+});
+
 describe('inventory adjustments and transfers', () => {
   it('records an adjustment-in after the atomic batch balance update', async () => {
     const original = batchDocument();
@@ -298,6 +390,25 @@ describe('inventory adjustments and transfers', () => {
       actor: ACTOR,
       models,
     })).rejects.toMatchObject({ status: 409 });
+    expect(models.InventoryMovementModel.create).not.toHaveBeenCalled();
+  });
+
+  it('guards adjustment-out against the reserved-stock floor', async () => {
+    const models = createModels({ batch: batchDocument({
+      reservationBalance: { quantity: 4, areaSqFt: 40 },
+    }) });
+    models.InventoryBatchModel.findOneAndUpdate.mockResolvedValue(null);
+    await expect(adjustInventoryStock({
+      batchId: BATCH_ID,
+      direction: 'OUT',
+      quantity: 7,
+      areaSqFt: 70,
+      reason: 'Physical correction',
+      actor: ACTOR,
+      models,
+    })).rejects.toMatchObject({ status: 409 });
+    const filter = models.InventoryBatchModel.findOneAndUpdate.mock.calls[0][0];
+    expect(JSON.stringify(filter.$expr)).toContain('reservationBalance');
     expect(models.InventoryMovementModel.create).not.toHaveBeenCalled();
   });
 
@@ -353,6 +464,21 @@ describe('inventory adjustments and transfers', () => {
       actor: ACTOR,
       models: createModels(),
     })).rejects.toThrow('same');
+  });
+
+  it('rejects transfer of a reserved whole batch', async () => {
+    const models = createModels({ batch: batchDocument({
+      reservationBalance: { quantity: 0, areaSqFt: 25 },
+    }) });
+    await expect(transferInventory({
+      batchId: BATCH_ID,
+      toLocation: { warehouse: 'Overflow Yard', zone: 'B' },
+      reason: 'Yard reorganization',
+      actor: ACTOR,
+      models,
+    })).rejects.toMatchObject({ status: 409, code: 'INVENTORY_RESERVED' });
+    expect(models.InventoryBatchModel.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(models.InventoryMovementModel.create).not.toHaveBeenCalled();
   });
 });
 
@@ -467,6 +593,41 @@ describe('integrity, reporting and query safety', () => {
     })).rejects.toMatchObject({ status: 409 });
   });
 
+  it('updates public visibility only through the explicit metadata allowlist', async () => {
+    const batch = batchDocument({ publicAvailabilityVisible: false });
+    const models = createModels({ batch });
+
+    await updateInventoryBatch({
+      batchId: BATCH_ID,
+      updates: { publicAvailabilityVisible: true },
+      actor: ACTOR,
+      models,
+    });
+
+    expect(batch.publicAvailabilityVisible).toBe(true);
+    expect(batch.save).toHaveBeenCalledOnce();
+    await expect(updateInventoryBatch({
+      batchId: BATCH_ID,
+      updates: { publicAvailabilityVisible: 'false' },
+      actor: ACTOR,
+      models: createModels({ batch: batchDocument() }),
+    })).rejects.toThrow('must be true or false');
+  });
+
+  it('defaults public availability visibility off at the schema boundary', () => {
+    const batch = new InventoryBatch({
+      batchNumber: 'BAT-2026-0098',
+      stoneRef,
+      inventoryMode: 'BATCH',
+      receivedDate: NOW,
+      quantity: { receivedCount: 1, currentCount: 1 },
+      location: { warehouse: 'Test Yard' },
+      status: 'AVAILABLE',
+      createdBy: ACTOR,
+    });
+    expect(batch.publicAvailabilityVisible).toBe(false);
+  });
+
   it('returns valuation totals separated by currency', async () => {
     const models = createModels();
     models.InventoryBatchModel.aggregate.mockResolvedValue([{
@@ -476,22 +637,35 @@ describe('integrity, reporting and query safety', () => {
         depletedBatches: 1,
         availableAreaTrackedBatches: 3,
         totalAvailableSqFt: 321.45678,
+        totalOnHandQuantity: 20,
+        totalReservedQuantity: 3,
+        totalAvailableToPromiseQuantity: 17,
+        totalOnHandSqFt: 321.45678,
+        totalReservedSqFt: 40,
+        totalAvailableToPromiseSqFt: 281.45678,
       }],
       inventoryCostValues: [
         { _id: 'INR', amount: 12345.678, batches: 2 },
         { _id: 'USD', amount: 999.9, batches: 1 },
       ],
     }]);
-    models.SlabModel.countDocuments.mockResolvedValue(7);
+    models.SlabModel.countDocuments.mockResolvedValueOnce(7).mockResolvedValueOnce(2);
 
     await expect(getInventorySummary({ models })).resolves.toEqual({
       activeBatches: 4,
       availableBatches: 3,
+      inProcessingBatches: 0,
       availableAreaTrackedBatches: 3,
       totalAvailableSqFt: 321.4568,
       individualSlabs: 7,
+      inProcessingSlabs: 2,
       depletedOrZeroStockBatches: 1,
       depletedBatches: 1,
+      stockBalances: {
+        onHand: { quantity: 20, areaSqFt: 321.4568 },
+        reserved: { quantity: 3, areaSqFt: 40 },
+        availableToPromise: { quantity: 17, areaSqFt: 281.4568 },
+      },
       inventoryCostValues: [
         { currency: 'INR', amount: 12345.68, batches: 2 },
         { currency: 'USD', amount: 999.9, batches: 1 },
@@ -530,6 +704,125 @@ describe('integrity, reporting and query safety', () => {
     expect(result).toEqual({ batches: [], total: 0, page: 1, pages: 1 });
     expect(query.limit).toHaveBeenCalledWith(100);
     expect(capturedFilter.$or[0].batchNumber.source).toBe('BAT\\.\\*');
+  });
+
+  it('lists authenticated allocation candidates using canonical stone and ATP', async () => {
+    const candidate = batchDocument({
+      reservationBalance: { quantity: 0, areaSqFt: 40 },
+    });
+    const query = {};
+    query.sort = vi.fn(() => query);
+    query.skip = vi.fn(() => query);
+    query.limit = vi.fn(() => query);
+    query.lean = vi.fn(() => Promise.resolve([candidate]));
+    const models = createModels({ batch: candidate });
+    let capturedFilter;
+    models.InventoryBatchModel.find = vi.fn((filter) => {
+      capturedFilter = filter;
+      return query;
+    });
+    models.InventoryBatchModel.countDocuments.mockResolvedValue(1);
+
+    const result = await listInventoryAllocationCandidates({
+      stoneId: stoneRef.stoneId,
+      page: 1,
+      limit: 20,
+      models,
+    });
+
+    expect(capturedFilter).toMatchObject({
+      'stoneRef.stoneId': stoneRef.stoneId,
+      status: 'AVAILABLE',
+      activeProcessingJob: null,
+      $expr: expect.any(Object),
+    });
+    expect(JSON.stringify(capturedFilter.$expr)).toContain('reservationBalance');
+    expect(result.batches[0].inventoryAvailability.availableToPromise.areaSqFt).toBe(60);
+  });
+
+  it('intersects allocation eligibility with an exact requested batch', async () => {
+    const candidate = batchDocument({ inventoryMode: 'INDIVIDUAL_SLAB' });
+    const query = {};
+    query.sort = vi.fn(() => query);
+    query.skip = vi.fn(() => query);
+    query.limit = vi.fn(() => query);
+    query.lean = vi.fn(() => Promise.resolve([candidate]));
+    const models = createModels({ batch: candidate });
+    let capturedFilter;
+    models.InventoryBatchModel.find = vi.fn((filter) => {
+      capturedFilter = filter;
+      return query;
+    });
+    models.InventoryBatchModel.countDocuments.mockResolvedValue(1);
+
+    const result = await listInventoryAllocationCandidates({
+      stoneId: stoneRef.stoneId,
+      batchId: BATCH_ID,
+      inventoryMode: 'INDIVIDUAL_SLAB',
+      finish: 'Honed',
+      thicknessMm: 20,
+      page: 1,
+      limit: 1,
+      models,
+    });
+
+    expect(capturedFilter).toMatchObject({
+      _id: BATCH_ID,
+      'stoneRef.stoneId': stoneRef.stoneId,
+      inventoryMode: 'INDIVIDUAL_SLAB',
+      finish: 'Honed',
+      thicknessMm: 20,
+      status: 'AVAILABLE',
+      activeProcessingJob: null,
+      $expr: expect.any(Object),
+    });
+    expect(query.limit).toHaveBeenCalledWith(1);
+    expect(result.batches).toHaveLength(1);
+  });
+
+  it('rejects an invalid exact allocation batch identifier', async () => {
+    await expect(listInventoryAllocationCandidates({
+      stoneId: stoneRef.stoneId,
+      batchId: 'not-an-object-id',
+      models: createModels(),
+    })).rejects.toMatchObject({ code: 'INVALID_ID', status: 400 });
+  });
+
+  it('lists only available, unreserved slabs for authenticated allocation', async () => {
+    const batch = batchDocument({
+      inventoryMode: 'INDIVIDUAL_SLAB',
+      location: undefined,
+      reservationBalance: { quantity: 0, areaSqFt: 0 },
+    });
+    const slab = {
+      _id: SLAB_ID,
+      slabNumber: 'SLB-2026-0001',
+      batch: BATCH_ID,
+      status: 'AVAILABLE',
+      activeProcessingJob: null,
+    };
+    const query = {};
+    query.sort = vi.fn(() => query);
+    query.skip = vi.fn(() => query);
+    query.limit = vi.fn(() => query);
+    query.lean = vi.fn(() => Promise.resolve([slab]));
+    const models = createModels({ batch, slab });
+    let capturedFilter;
+    models.SlabModel.find = vi.fn((filter) => {
+      capturedFilter = filter;
+      return query;
+    });
+    models.SlabModel.countDocuments.mockResolvedValue(1);
+
+    const result = await listReservableSlabs({ batchId: BATCH_ID, models });
+
+    expect(capturedFilter).toMatchObject({
+      batch: BATCH_ID,
+      status: 'AVAILABLE',
+      activeProcessingJob: null,
+      $or: [{ reservation: { $exists: false } }, { reservation: null }],
+    });
+    expect(result.slabs).toEqual([slab]);
   });
 
   it('marks stable batch and slab reference fields immutable at schema level', () => {

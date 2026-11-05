@@ -44,6 +44,17 @@ const areaSchema = new Schema({
   basis: { type: String, enum: AREA_BASES },
 }, { _id: false });
 
+const reservationBalanceSchema = new Schema({
+  quantity: {
+    type: Number,
+    required: true,
+    default: 0,
+    min: 0,
+    validate: { validator: Number.isInteger, message: 'Reserved quantity must be a whole number.' },
+  },
+  areaSqFt: { type: Number, required: true, default: 0, min: 0 },
+}, { _id: false });
+
 const moneyRateSchema = new Schema({
   costPerSqFt: { type: Number, min: 0 },
   currency: { type: String, trim: true, uppercase: true, minlength: 3, maxlength: 3 },
@@ -84,17 +95,29 @@ const inventoryBatchSchema = new Schema({
   nominalDimensions: { type: dimensionsSchema, default: undefined },
   quantity: { type: quantitySchema, required: true, default: () => ({}) },
   area: { type: areaSchema, default: undefined },
+  reservationBalance: { type: reservationBalanceSchema, required: true, default: () => ({}) },
   cost: { type: moneyRateSchema, default: undefined },
   selling: { type: sellingRateSchema, default: undefined },
   location: { type: locationSchema, default: undefined },
   grade: { type: String, trim: true, maxlength: 100 },
   shade: { type: String, trim: true, maxlength: 100 },
   notes: { type: String, trim: true, maxlength: 3000 },
+  publicAvailabilityVisible: {
+    type: Boolean,
+    required: true,
+    default: false,
+  },
   status: {
     type: String,
     enum: INVENTORY_STATUSES,
     required: true,
     default: 'DRAFT',
+    index: true,
+  },
+  activeProcessingJob: {
+    type: Schema.Types.ObjectId,
+    ref: 'ProcessingJob',
+    default: null,
     index: true,
   },
   createdBy: { type: String, required: true, trim: true, maxlength: 120, immutable: true },
@@ -124,9 +147,21 @@ inventoryBatchSchema.pre('validate', function validateInventoryBatch() {
   if (this.selling?.pricePerSqFt != null && !this.selling.currency) {
     this.invalidate('selling.currency', 'Currency is required when selling price per square foot is supplied.');
   }
+
+  const reservedQuantity = Number(this.reservationBalance?.quantity || 0);
+  const reservedArea = Number(this.reservationBalance?.areaSqFt || 0);
+  const onHandQuantity = Number(this.quantity?.currentCount || 0);
+  const onHandArea = this.area?.availableSqFt == null ? null : Number(this.area.availableSqFt);
+  if (reservedQuantity > onHandQuantity) {
+    this.invalidate('reservationBalance.quantity', 'Reserved quantity cannot exceed on-hand quantity.');
+  }
+  if (onHandArea == null ? reservedArea > 0 : reservedArea > onHandArea + 0.0001) {
+    this.invalidate('reservationBalance.areaSqFt', 'Reserved area cannot exceed on-hand area.');
+  }
 });
 
 inventoryBatchSchema.index({ 'stoneRef.slug': 1, status: 1 });
+inventoryBatchSchema.index({ 'stoneRef.slug': 1, publicAvailabilityVisible: 1, status: 1 });
 inventoryBatchSchema.index({ status: 1, updatedAt: -1 });
 inventoryBatchSchema.index({ finish: 1, status: 1 });
 inventoryBatchSchema.index({ 'location.warehouse': 1, status: 1 });
