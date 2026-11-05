@@ -109,7 +109,7 @@ describe('inventory constants and reference helpers', () => {
       'DRAFT', 'AVAILABLE', 'HOLD', 'IN_PROCESSING', 'DEPLETED', 'ARCHIVED',
     ]);
     expect(MOVEMENT_TYPES).toEqual([
-      'RECEIPT', 'ADJUSTMENT_IN', 'ADJUSTMENT_OUT', 'TRANSFER', 'PROCESSING_ISSUE', 'PROCESSING_RETURN',
+      'RECEIPT', 'ADJUSTMENT_IN', 'ADJUSTMENT_OUT', 'TRANSFER', 'PROCESSING_ISSUE', 'PROCESSING_RETURN', 'DISPATCH',
     ]);
     expect(ADJUSTMENT_DIRECTIONS).toEqual(['IN', 'OUT']);
   });
