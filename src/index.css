@@ -18,6 +18,23 @@
   --color-danger: #9a4338;
 }
 
+.admin-shell {
+  --admin-background: #f5f5f4;
+  --admin-surface: #ffffff;
+  --admin-border: #e7e5e4;
+  --admin-text: #1c1917;
+  --admin-text-muted: #57534e;
+  --admin-accent: #b45309;
+  --admin-sidebar: #0c0a09;
+  background: var(--admin-background);
+  color: var(--admin-text);
+  font-family: 'Inter', sans-serif;
+}
+
+.admin-shell :where(h1, h2, h3, h4, h5, h6) {
+  font-family: 'Inter', sans-serif;
+}
+
 @layer base {
   html, body {
     @apply antialiased;

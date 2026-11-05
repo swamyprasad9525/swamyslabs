@@ -43,6 +43,12 @@ describe('inventory list validation', () => {
 
   it('bounds movement and slab history pagination', () => {
     expect(parseInventoryChildListQuery({ page: '2', limit: '50' }).value).toEqual({ page: 2, limit: 50 });
+    expect(parseInventoryChildListQuery({ status: 'AVAILABLE' }).value).toEqual({
+      page: 1,
+      limit: 50,
+      status: 'AVAILABLE',
+    });
+    expect(parseInventoryChildListQuery({ status: 'NOT_A_STATUS' }).error).toMatch(/Status/);
     expect(parseInventoryChildListQuery({ limit: '500' }).error).toMatch(/Limit/);
   });
 });
@@ -130,6 +136,17 @@ describe('inventory batch validation', () => {
     expect(validateInventoryBatchCreate(batchInput({ status: 'DEPLETED' })).error).toMatch(/Status/);
     expect(validateInventoryBatchCreate(batchInput({ status: 'ARCHIVED' })).error).toMatch(/Status/);
     expect(validateInventoryBatchCreate(batchInput({ status: 'HOLD' })).value.status).toBe('HOLD');
+  });
+
+  it('accepts only explicit booleans for public availability visibility', () => {
+    expect(validateInventoryBatchCreate(batchInput({ publicAvailabilityVisible: true })).value)
+      .toMatchObject({ publicAvailabilityVisible: true });
+    expect(validateInventoryBatchCreate(batchInput({ publicAvailabilityVisible: 'true' })).error)
+      .toMatch(/true or false/);
+    expect(validateInventoryBatchUpdate({ publicAvailabilityVisible: false }).value)
+      .toEqual({ publicAvailabilityVisible: false });
+    expect(validateInventoryBatchUpdate({ publicAvailabilityVisible: 1 }).error)
+      .toMatch(/true or false/);
   });
 
   it('uses an explicit batch update allowlist', () => {

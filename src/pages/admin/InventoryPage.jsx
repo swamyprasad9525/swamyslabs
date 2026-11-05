@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Boxes,
   CircleDollarSign,
+  Factory,
   Layers3,
   MapPin,
   PackageCheck,
@@ -58,8 +59,8 @@ function MetricCard({ label, value, detail, icon }) {
 function InventorySkeleton() {
   return (
     <div className="space-y-6" role="status" aria-label="Loading inventory">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        {Array.from({ length: 6 }, (_, index) => <div key={index} className="h-28 animate-pulse rounded-xl border border-stone-200 bg-white" />)}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+        {Array.from({ length: 7 }, (_, index) => <div key={index} className="h-28 animate-pulse rounded-xl border border-stone-200 bg-white" />)}
       </div>
       <div className="h-96 animate-pulse rounded-xl border border-stone-200 bg-white" />
     </div>
@@ -182,9 +183,10 @@ export default function InventoryPage() {
         <>
           {error && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Latest refresh failed. Showing the last loaded inventory. {error}</div>}
 
-          <section aria-label="Inventory summary" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <section aria-label="Inventory summary" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
             <MetricCard label="Active batches" value={formatInventoryNumber(metrics?.activeBatches, { maximumFractionDigits: 0 })} icon={Boxes} />
             <MetricCard label="Available batches" value={formatInventoryNumber(metrics?.availableBatches, { maximumFractionDigits: 0 })} icon={PackageCheck} />
+            <MetricCard label="In processing" value={formatInventoryNumber(metrics?.inProcessingBatches, { maximumFractionDigits: 0 })} detail={`${formatInventoryNumber(metrics?.inProcessingSlabs, { maximumFractionDigits: 0 })} individual slabs in production.`} icon={Factory} />
             <MetricCard
               label="Recorded available area"
               value={metrics?.totalAvailableSqFt == null ? 'Not recorded' : `${formatInventoryNumber(metrics.totalAvailableSqFt)} sq.ft`}

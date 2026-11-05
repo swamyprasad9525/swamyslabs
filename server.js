@@ -8,6 +8,8 @@ import invoicesRouter from './src-server/routes/invoices.js';
 import adminRouter from './src-server/routes/admin.js';
 import crmRouter from './src-server/routes/crm.js';
 import inventoryRouter from './src-server/routes/inventory.js';
+import publicInventoryRouter from './src-server/routes/publicInventory.js';
+import processingRouter from './src-server/routes/processing.js';
 import { validateEnvironment, getAllowedOrigins } from './src-server/config/env.js';
 import { connectDB, databaseStatus } from './src-server/config/database.js';
 import { submitCallbackLead, submitEnquiryLead } from './src-server/controllers/publicLeadController.js';
@@ -72,6 +74,7 @@ app.post('/api/request-callback', noStore, apiLimiter, submitCallbackLead);
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', database: databaseStatus() });
 });
+app.use('/api', publicInventoryRouter);
 
 app.use('/api/invoices', (req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -84,6 +87,7 @@ app.use('/api/admin/login', (req, res, next) => {
 app.use('/api/admin', adminRouter);
 app.use('/api/admin', crmRouter);
 app.use('/api/admin', inventoryRouter);
+app.use('/api/admin', processingRouter);
 
 app.use((err, req, res, _next) => {
   if (err instanceof multer.MulterError) {

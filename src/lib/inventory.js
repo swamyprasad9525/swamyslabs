@@ -11,6 +11,7 @@ export const INVENTORY_STATUSES = Object.freeze([
   { value: 'DRAFT', label: 'Draft' },
   { value: 'AVAILABLE', label: 'Available' },
   { value: 'HOLD', label: 'On hold' },
+  { value: 'IN_PROCESSING', label: 'In processing' },
   { value: 'DEPLETED', label: 'Depleted' },
   { value: 'ARCHIVED', label: 'Archived' },
 ]);
@@ -23,6 +24,7 @@ export const INVENTORY_STATUS_STYLES = Object.freeze({
   DRAFT: 'border-stone-300 bg-stone-100 text-stone-700',
   AVAILABLE: 'border-emerald-200 bg-emerald-50 text-emerald-800',
   HOLD: 'border-amber-200 bg-amber-50 text-amber-900',
+  IN_PROCESSING: 'border-violet-200 bg-violet-50 text-violet-800',
   DEPLETED: 'border-rose-200 bg-rose-50 text-rose-800',
   ARCHIVED: 'border-slate-300 bg-slate-100 text-slate-600',
 });
@@ -32,6 +34,8 @@ export const MOVEMENT_TYPE_LABELS = Object.freeze({
   ADJUSTMENT_IN: 'Adjustment in',
   ADJUSTMENT_OUT: 'Adjustment out',
   TRANSFER: 'Transfer',
+  PROCESSING_ISSUE: 'Issued to processing',
+  PROCESSING_RETURN: 'Returned from processing',
 });
 
 export function labelInventoryMode(value) {
